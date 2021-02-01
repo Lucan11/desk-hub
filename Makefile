@@ -61,6 +61,9 @@ SRC_FILES += \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_ble.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_soc.c \
+  $(PROJ_DIR)/src/init/init.c \
+  $(PROJ_DIR)/src/bluetooth/bluetooth.c \
+  $(PROJ_DIR)/src/log/log.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
@@ -191,12 +194,13 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/nfc/ndef/conn_hand_parser/ac_rec_parser \
   $(SDK_ROOT)/components/libraries/stack_guard \
   $(SDK_ROOT)/components/libraries/log/src \
+  $(wildcard $(PROJ_DIR)/src/*) \
 
 # Libraries common to all targets
 LIB_FILES += \
 
 # Optimization flags
-OPT = -O0 -g3
+OPT = -Os -g3
 # Uncomment the line below to enable link time optimization
 OPT += -flto
 
