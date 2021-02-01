@@ -1,1 +1,14 @@
+## Ignore the build dir
 build/
+
+## Ignore vscode folder
+## Except for some things that should be shared (project specific)
+.vscode/*
+# Code formatting
+!.vscode/settings.json
+# Shared tasks
+!.vscode/tasks.json
+# Launch configs (debug)
+!.vscode/launch.json
+# Extension settings
+!.vscode/extensions.json

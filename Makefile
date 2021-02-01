@@ -1,5 +1,4 @@
 PROJECT_NAME     := outside-temperature-sensor
-#TARGETS          := nrf52810_xxaa
 TARGETS          := nrf52832_xxaa
 
 SDK_ROOT := ../SDK/nRF5_SDK_17.0.2_d674dde
@@ -197,9 +196,9 @@ INC_FOLDERS += \
 LIB_FILES += \
 
 # Optimization flags
-OPT = -Os -g3
+#OPT = -O0 -g3
 # Uncomment the line below to enable link time optimization
-OPT += -flto
+#OPT += -flto
 
 # C flags common to all targets
 CFLAGS += $(OPT)
@@ -291,8 +290,8 @@ flash: default
 
 # Flash softdevice
 flash_softdevice:
-	@echo Flashing: s112_nrf52_7.2.0_softdevice.hex
-	nrfjprog -f nrf52 --program $(SDK_ROOT)/components/softdevice/s112/hex/s112_nrf52_7.2.0_softdevice.hex --sectorerase
+	@echo Flashing: s132_nrf52_7.2.0_softdevice.hex
+	nrfjprog -f nrf52 --program $(SDK_ROOT)/components/softdevice/s132/hex/s132_nrf52_7.2.0_softdevice.hex --sectorerase
 	nrfjprog -f nrf52 --reset
 
 erase:
