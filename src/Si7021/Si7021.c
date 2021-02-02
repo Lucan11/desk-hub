@@ -10,7 +10,9 @@
 static const uint8_t power_up_time_ms = 15;
 static const uint8_t address = 0x40;
 static const uint8_t RST_CMD = 0xFE;
-static const uint8_t MSR_TMP_CMD = 0xE3;
+// static const uint8_t MSR_TMP_CMD = 0xE3;
+static const uint8_t GET_TMP_CMD = 0xE0;
+static const uint8_t MSR_HUM_CMD = 0xE5;
 static const uint8_t USR_REG = 0xE7;
 static const uint8_t USR_RES0 = 0;
 static const uint8_t USR_RES1 = 7;
@@ -117,18 +119,31 @@ void temperature_sensor_init() {
     apply_settings();
 }
 
+
 static inline float tmp_code_to_float(const uint16_t code) {
     // from datasheet
-    return ((175.72 * code)/65536) - 46.85;
+    return ((175.72f * code)/65536) - 46.85f;
 }
 
-void temperature_sensor_read() {
-    const size_t temp_reading_num_bytes = 2;
-    uint8_t rx[temp_reading_num_bytes];
-    float temp;
+static inline float hum_code_to_float(const uint16_t code) {
+    // from datasheet
+    return ((125.0f * code)/65536) - 6.0f;
+}
 
-    read_bytes(&MSR_TMP_CMD, 1, rx, temp_reading_num_bytes);
 
-    temp = tmp_code_to_float(rx[0]<<8 | rx[1]);
-    NRF_LOG_INFO("read: %i", temp*10);
+temperature_sensor_data_t temperature_sensor_read() {
+    const size_t reading_num_bytes = 2;
+    uint8_t rx[reading_num_bytes];
+    temperature_sensor_data_t data;
+
+    read_bytes(&MSR_HUM_CMD, 1, rx, reading_num_bytes);
+    data.humidity = hum_code_to_float(rx[0]<<8 | rx[1]);
+
+    read_bytes(&GET_TMP_CMD, 1, rx, reading_num_bytes);
+    data.temperature = tmp_code_to_float(rx[0]<<8 | rx[1]);
+
+    NRF_LOG_INFO("Temperature: %i", data.temperature*10);
+    NRF_LOG_INFO("Humidity: %i", data.humidity*10);
+
+    return data;
 }
