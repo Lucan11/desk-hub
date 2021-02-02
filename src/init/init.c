@@ -6,6 +6,7 @@
 
 #include "bluetooth.h"
 #include "log.h"
+#include "Si7021.h"
 
 
 
@@ -37,6 +38,8 @@ void init(){
     leds_init();
     power_management_init();
     bluetooth_init();
+
+    temperature_sensor_init();
 
     NRF_LOG_INFO("Beacon example started.");
     bluetooth_start_advertisement();

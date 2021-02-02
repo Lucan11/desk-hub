@@ -64,6 +64,8 @@ SRC_FILES += \
   $(PROJ_DIR)/src/init/init.c \
   $(PROJ_DIR)/src/bluetooth/bluetooth.c \
   $(PROJ_DIR)/src/log/log.c \
+  $(PROJ_DIR)/src/Si7021/Si7021.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_twi.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
@@ -200,9 +202,15 @@ INC_FOLDERS += \
 LIB_FILES += \
 
 # Optimization flags
-OPT = -Os -g3
+#OPT = -Os
+OPT += -g3
 # Uncomment the line below to enable link time optimization
-OPT += -flto
+#OPT += -flto
+
+# Make sure we pretend we already unclude the old config, to make sure it does not get included
+#OPT += -DAPPLY_OLD_CONFIG_H__
+OPT += -DDEBUG
+OPT += -D_DEBUG
 
 # C flags common to all targets
 CFLAGS += $(OPT)

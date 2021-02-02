@@ -19,6 +19,7 @@ static void idle_state_handle(void)
 
 
 int main(void) {
+    unsigned int i = 0;
     // Set the led pin as output
     nrf_gpio_cfg_output(7);
 
@@ -29,6 +30,10 @@ int main(void) {
     while(true) {
         idle_state_handle();
         nrf_gpio_pin_toggle(7);
-        temperature_sensor_read();
+
+        if(i % 5 == 0)
+            temperature_sensor_read();
+
+        i++;
     }
 }
