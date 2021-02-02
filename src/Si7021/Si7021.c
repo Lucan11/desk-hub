@@ -9,13 +9,24 @@
 // Device specific commands
 static const uint8_t power_up_time_ms = 15;
 static const uint8_t address = 0x40;
-static const uint8_t RST_REG = 0xFE;
+static const uint8_t RST_CMD = 0xFE;
+static const uint8_t MSR_TMP_CMD = 0xE3;
 static const uint8_t USR_REG = 0xE7;
 static const uint8_t USR_RES0 = 0;
 static const uint8_t USR_RES1 = 7;
 
 static const nrfx_twi_t instance = NRFX_TWI_INSTANCE(0);    // Create an TWI instance using register 0
 static volatile unsigned int transfer_done = 0;
+
+static inline void wait_for_transfer();
+static void twi_handler(nrfx_twi_evt_t const * p_event, void * p_context);
+static inline void read_bytes(const uint8_t * const tx, const size_t tx_len, uint8_t * rx, const size_t rx_len);
+static inline uint8_t read_register(const uint8_t reg);
+static inline void reset();
+static inline void write_byte(const uint8_t reg, const uint8_t data);
+static inline void apply_settings();
+static inline float tmp_code_to_float(const uint16_t code);
+
 
 static inline void wait_for_transfer() {
     while(transfer_done == 0) {
@@ -25,61 +36,69 @@ static inline void wait_for_transfer() {
     transfer_done = 0;
 }
 
-static inline void reset() {
-    nrfx_err_t res;
-
-    res = nrfx_twi_tx(&instance, address, &RST_REG, 1, 0);
-    APP_ERROR_CHECK(res);
-
-    wait_for_transfer();
-
-    nrf_delay_ms(power_up_time_ms);
-}
-
 static void twi_handler(nrfx_twi_evt_t const * p_event, void * p_context) {
     nrfx_twi_0_irq_handler();
     transfer_done = 1;
 }
 
-static inline uint8_t read_byte(const uint8_t reg) {
+static inline void read_bytes(const uint8_t * const tx, const size_t tx_len, uint8_t * rx, const size_t rx_len) {
     nrfx_err_t res;
-    uint8_t RX[1] = {0};
-    const nrfx_twi_xfer_desc_t desc = NRFX_TWI_XFER_DESC_TXRX(address, (uint8_t*)&reg, 1, RX, 1);
+    const nrfx_twi_xfer_desc_t desc = NRFX_TWI_XFER_DESC_TXRX(address, (uint8_t*)tx, tx_len, rx, rx_len);
 
-    res = nrfx_twi_xfer(&instance, &desc, NRFX_TWI_FLAG_TX_NO_STOP);
+    // Clear the rx array
+    memset(rx, 0x00, rx_len);
+
+    // Send the read command
+    res = nrfx_twi_xfer(&instance, &desc, 0);
     APP_ERROR_CHECK(res);
-
     wait_for_transfer();
+}
 
-    return RX[0];
+static inline uint8_t read_register(const uint8_t reg) {
+    uint8_t value;
+    read_bytes(&reg, 1, &value, 1);
+    return value;
+}
+
+static inline void reset() {
+    // Send the reset command and ignore the return value
+    (void)read_register(RST_CMD);
+
+    nrf_delay_ms(power_up_time_ms);
 }
 
 static inline void write_byte(const uint8_t reg, const uint8_t data) {
     nrfx_err_t res;
+    uint8_t value;
     const nrfx_twi_xfer_desc_t desc = NRFX_TWI_XFER_DESC_TXTX(address, (uint8_t*)&reg, 1, (uint8_t*)&data, 1);
 
-    // Send the data
-    res = nrfx_twi_xfer(&instance, &desc, NRFX_TWI_FLAG_TX_NO_STOP);
+    // Write to the register
+    res = nrfx_twi_xfer(&instance, &desc, 0);
     APP_ERROR_CHECK(res);
     wait_for_transfer();
 
     // Read the register to verify correctness
-    NRFX_ASSERT(data == read_byte(reg));
+    value = read_register(reg);
+    NRFX_ASSERT(data == value);
 }
 
 static inline void apply_settings() {
-    uint8_t reg = read_byte(USR_REG);
+    uint8_t reg;
+
+    // Read the current register value
+    reg = read_register(USR_REG);
 
     // Set the resolution to 00 (max)
     reg &= ~((1<<USR_RES0) | (1<<USR_RES1));
 
+    // Write the new register value
     write_byte(USR_REG, reg);
 }
 
 void temperature_sensor_init() {
     nrfx_err_t res;
 
-    // Set the configuration
+    // Set the configuration to 400KHz, default config
     const nrfx_twi_config_t config = {                                                \
         .frequency          = NRF_TWI_FREQ_400K,                                      \
         .scl                = 12,                                                     \
@@ -98,16 +117,18 @@ void temperature_sensor_init() {
     apply_settings();
 }
 
+static inline float tmp_code_to_float(const uint16_t code) {
+    // from datasheet
+    return ((175.72 * code)/65536) - 46.85;
+}
+
 void temperature_sensor_read() {
-    // nrfx_err_t res;
-    // uint8_t RX[1] = {0};
-    // const nrfx_twi_xfer_desc_t desc = NRFX_TWI_XFER_DESC_TXRX(address, (uint8_t*)USR_REG, sizeof(USR_REG), RX, sizeof(RX));
+    const size_t temp_reading_num_bytes = 2;
+    uint8_t rx[temp_reading_num_bytes];
+    float temp;
 
-    // res = nrfx_twi_xfer(&instance, &desc, NRFX_TWI_FLAG_TX_NO_STOP);
-    // APP_ERROR_CHECK(res);
+    read_bytes(&MSR_TMP_CMD, 1, rx, temp_reading_num_bytes);
 
-    // wait_for_transfer();
-
-    // NRF_LOG_INFO("read RX0: %i", RX[0]);
-    NRF_LOG_INFO("read RX0: %i", read_byte(USR_REG));
+    temp = tmp_code_to_float(rx[0]<<8 | rx[1]);
+    NRF_LOG_INFO("read: %i", temp*10);
 }
