@@ -1,7 +1,4 @@
-
-
 #include "nrf_pwr_mgmt.h"
-#include "nrf_gpio.h"
 
 #include "log.h"
 #include "init.h"
@@ -20,8 +17,6 @@ static void idle_state_handle(void)
 
 int main(void) {
     unsigned int i = 0;
-    // Set the led pin as output
-    nrf_gpio_cfg_output(7);
 
     // Initialize all modules
     init();
@@ -29,7 +24,6 @@ int main(void) {
     // Enter main loop.
     while(true) {
         idle_state_handle();
-        nrf_gpio_pin_toggle(7);
 
         if(i % 5 == 0)
             temperature_sensor_read();
