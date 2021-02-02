@@ -211,6 +211,8 @@ OPT += -g3
 #OPT += -DAPPLY_OLD_CONFIG_H__
 OPT += -DDEBUG
 OPT += -D_DEBUG
+OPT += -DDEBUG_NRF
+OPT += -DDEBUG_NRF_USER
 
 # C flags common to all targets
 CFLAGS += $(OPT)
