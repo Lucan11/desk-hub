@@ -3,6 +3,7 @@
 #include "log.h"
 #include "init.h"
 #include "Si7021.h"
+#include "bluetooth.h"
 
 
 static void idle_state_handle(void)
@@ -16,6 +17,7 @@ static void idle_state_handle(void)
 
 
 int main(void) {
+    temperature_sensor_data_t current_sensor_values;
     unsigned int i = 0;
 
     // Initialize all modules
@@ -25,8 +27,11 @@ int main(void) {
     while(true) {
         idle_state_handle();
 
-        if(i % 5 == 0)
-            temperature_sensor_read();
+        // Make this a timer later
+        if(i % 5 == 0) {
+            current_sensor_values = temperature_sensor_read();
+            bluetooth_update_advertisement_data(&current_sensor_values);
+        }
 
         i++;
     }
