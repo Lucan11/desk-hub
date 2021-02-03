@@ -1,5 +1,5 @@
 # outside-temperature-sensor
-Code to run on the nFR52832 from sparkfun  (https://www.sparkfun.com/products/13990)
+Code to run on the nRF52832 from sparkfun  (https://www.sparkfun.com/products/13990)
 
 This sensor measures the temperature and transmits that data in a bluetooth advertisement (beaconing)
 
