@@ -156,11 +156,8 @@ void bluetooth_update_advertisement_data(const temperature_sensor_data_t * const
     NRFX_ASSERT(data != NULL);
 
     // Update temperature
-    // m_beacon_info.humidity = data->humidity;
-    // m_beacon_info.temperature = data->temperature;
-
-    m_beacon_info.humidity++;
-    m_beacon_info.temperature++;
+    m_beacon_info.humidity = data->humidity;
+    m_beacon_info.temperature = data->temperature;
 
     memset(&new_adv_data, 0, sizeof(new_adv_data));
 
