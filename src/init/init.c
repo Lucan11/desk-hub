@@ -41,6 +41,5 @@ void init(){
 
     temperature_sensor_init();
 
-    NRF_LOG_INFO("Beacon example started.");
-    bluetooth_start_advertisement();
+    NRF_LOG_INFO("Desk hub initialized");
 }

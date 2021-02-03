@@ -7,13 +7,8 @@ typedef struct _temperature_sensor_data temperature_sensor_data_t;
 // Initialize bluetooth
 void bluetooth_init();
 
-
-// Start the bluetooth advertisements
-void bluetooth_start_advertisement();
-
-
-// Update the bluetooth advertising data, data will be truncated if too big
-void bluetooth_update_advertisement_data(const temperature_sensor_data_t * const data);
+// Function to scan the ble advertisements for the data from the sensor outside
+temperature_sensor_data_t bluetooth_get_outside_temperature();
 
 
 #endif//_BLUETOOTH_H_

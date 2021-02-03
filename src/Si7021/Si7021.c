@@ -142,8 +142,8 @@ temperature_sensor_data_t temperature_sensor_read() {
     read_bytes(&GET_TMP_CMD, 1, rx, reading_num_bytes);
     data.temperature = tmp_code_to_float(rx[0]<<8 | rx[1]);
 
-    NRF_LOG_INFO("Temperature: %i", data.temperature*10);
-    NRF_LOG_INFO("Humidity: %i", data.humidity*10);
+    // NRF_LOG_INFO("Temperature: %i", data.temperature*10);
+    // NRF_LOG_INFO("Humidity: %i", data.humidity*10);
 
     return data;
 }

@@ -17,7 +17,7 @@ static void idle_state_handle(void)
 
 
 int main(void) {
-    temperature_sensor_data_t current_sensor_values;
+    temperature_sensor_data_t sensor_values_inside, sensor_values_outside;
     unsigned int i = 0;
 
     // Initialize all modules
@@ -29,8 +29,11 @@ int main(void) {
 
         // Make this a timer later
         if(i % 5 == 0) {
-            current_sensor_values = temperature_sensor_read();
-            bluetooth_update_advertisement_data(&current_sensor_values);
+            sensor_values_inside = temperature_sensor_read();
+            sensor_values_outside = bluetooth_get_outside_temperature();
+
+            NRF_LOG_INFO("Temp inside: %i outside: %i", sensor_values_inside.temperature, sensor_values_outside.temperature);
+            NRF_LOG_INFO("Humidity inside: %i outside: %i", sensor_values_inside.humidity, sensor_values_outside.humidity);
         }
 
         i++;

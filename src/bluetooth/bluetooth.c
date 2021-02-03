@@ -1,10 +1,25 @@
 #include "bluetooth.h"
 
-#include "bsp.h"
-#include "nrf_soc.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 #include "nrf_sdh.h"
 #include "nrf_sdh_ble.h"
-#include "ble_advdata.h"
+#include "nrf_sdh_soc.h"
+#include "nrf_pwr_mgmt.h"
+#include "app_timer.h"
+#include "boards.h"
+#include "bsp.h"
+#include "bsp_btn_ble.h"
+#include "ble.h"
+#include "ble_hci.h"
+#include "ble_advertising.h"
+#include "ble_conn_params.h"
+#include "ble_db_discovery.h"
+#include "ble_lbs_c.h"
+#include "nrf_ble_gatt.h"
+#include "nrf_ble_scan.h"
+
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
@@ -12,104 +27,134 @@
 #include "Si7021.h"
 
 
-/**< A tag identifying the SoftDevice BLE configuration. */
-#define APP_BLE_CONN_CFG_TAG             1
-/**< The advertising interval for non-connectable advertisement (100 ms). This value can vary between 100ms to 10.24s). */
-#define NON_CONNECTABLE_ADV_INTERVAL    MSEC_TO_UNITS(100, UNIT_0_625_MS)
-#define DEVICE_NAME                     ((uint8_t const *)"tempsensor")
+#define CENTRAL_SCANNING_LED            BSP_BOARD_LED_0                     /**< Scanning LED will be on when the device is scanning. */
+#define CENTRAL_CONNECTED_LED           BSP_BOARD_LED_1                     /**< Connected LED will be on when the device is connected. */
+#define LEDBUTTON_LED                   BSP_BOARD_LED_2                     /**< LED to indicate a change of state of the the Button characteristic on the peer. */
 
-/**< Advertising handle used to identify an advertising set. */
-static uint8_t m_adv_handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;
-/**< Buffer for storing an encoded advertising set. */
-static uint8_t m_enc_advdata1[BLE_GAP_ADV_SET_DATA_SIZE_MAX];
-static uint8_t m_enc_advdata2[BLE_GAP_ADV_SET_DATA_SIZE_MAX];
+#define SCAN_INTERVAL                   0x00A0                              /**< Determines scan interval in units of 0.625 millisecond. */
+#define SCAN_WINDOW                     0x0050                              /**< Determines scan window in units of 0.625 millisecond. */
+#define SCAN_DURATION                   0x0000                              /**< Timout when scanning. 0x0000 disables timeout. */
 
-// Not sure which of these need to be double to update the advertisement data, so double them al for now
-static ble_advdata_t        advdata;
-static ble_gap_adv_params_t adv_params;
-static ble_advdata_manuf_data_t manuf_specific_data;
+#define MIN_CONNECTION_INTERVAL         MSEC_TO_UNITS(7.5, UNIT_1_25_MS)    /**< Determines minimum connection interval in milliseconds. */
+#define MAX_CONNECTION_INTERVAL         MSEC_TO_UNITS(30, UNIT_1_25_MS)     /**< Determines maximum connection interval in milliseconds. */
+#define SLAVE_LATENCY                   0                                   /**< Determines slave latency in terms of connection events. */
+#define SUPERVISION_TIMEOUT             MSEC_TO_UNITS(4000, UNIT_10_MS)     /**< Determines supervision time-out in units of 10 milliseconds. */
 
-/**@brief Struct that contains pointers to the encoded advertising data. */
-static ble_gap_adv_data_t m_adv_data = {
-    .adv_data = {
-            .p_data = m_enc_advdata1,
-            .len = BLE_GAP_ADV_SET_DATA_SIZE_MAX
-    },
-    .scan_rsp_data =  {
-            .p_data = NULL,
-            .len = 0
-    }
-};
+#define APP_BLE_CONN_CFG_TAG            1                                   /**< A tag identifying the SoftDevice BLE configuration. */
+#define APP_BLE_OBSERVER_PRIO           3                                   /**< Application's BLE observer priority. You shouldn't need to modify this value. */
+
+NRF_BLE_SCAN_DEF(m_scan);                                       /**< Scanning module instance. */
+NRF_BLE_GATT_DEF(m_gatt);                                       /**< GATT module instance. */
+BLE_DB_DISCOVERY_DEF(m_db_disc);                                /**< DB discovery module instance. */
+NRF_BLE_GQ_DEF(m_ble_gatt_queue,                                /**< BLE GATT Queue instance. */
+               NRF_SDH_BLE_CENTRAL_LINK_COUNT,
+               NRF_BLE_GQ_QUEUE_SIZE);
+
+static const char m_target_periph_name[] = "tempsensor";     /**< Name of the device we try to connect to. This name is searched in the scan report data*/
 
 
-// The manufacturer data in the BLE advertisement
-static struct _m_beacon_info {
-    float temperature;
-    float humidity;
-}
-PACKED
-m_beacon_info = {
-    .temperature = 0,
-    .humidity = 0
-};
+static void scan_start();
 
 
-/**@brief Function for initializing the Advertising functionality.
- *
- * @details Encodes the required advertising data and passes it to the stack.
- *          Also builds a structure to be passed to the stack when starting advertising.
+/**@brief Function to start scanning.
  */
-static void advertising_init(void) {
-    ret_code_t           err_code;
-    ble_gap_conn_sec_mode_t sec_mode;
-
-
-    // Set the device name
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
-    err_code = sd_ble_gap_device_name_set(&sec_mode, DEVICE_NAME, strlen((const char*)DEVICE_NAME));
-    APP_ERROR_CHECK(err_code);
-
-    // Build and set advertising data.
-    memset(&advdata, 0, sizeof(advdata));
-    memset(&manuf_specific_data, 0, sizeof(ble_advdata_manuf_data_t));
-
-    advdata.name_type          = BLE_ADVDATA_FULL_NAME;
-    advdata.include_appearance = true;
-    advdata.flags              = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
-
-    advdata.p_manuf_specific_data = &manuf_specific_data;
-    advdata.p_manuf_specific_data->company_identifier = 0x0059; //0xFFFF
-    advdata.p_manuf_specific_data->data.p_data = (uint8_t*)&m_beacon_info;
-    advdata.p_manuf_specific_data->data.size = sizeof(m_beacon_info);
-    err_code = ble_advdata_encode(&advdata, m_adv_data.adv_data.p_data, &m_adv_data.adv_data.len);
-    APP_ERROR_CHECK(err_code);
-
-    // Start advertising.
-    memset(&adv_params, 0, sizeof(adv_params));
-    adv_params.p_peer_addr   = NULL;
-    adv_params.filter_policy = BLE_GAP_ADV_FP_ANY;
-    adv_params.interval      = NON_CONNECTABLE_ADV_INTERVAL;
-
-    adv_params.properties.type = BLE_GAP_ADV_TYPE_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
-    adv_params.duration        = 0;
-    adv_params.primary_phy     = BLE_GAP_PHY_AUTO;
-    adv_params.secondary_phy   = BLE_GAP_PHY_AUTO;
-
-    err_code = sd_ble_gap_adv_set_configure(&m_adv_handle, &m_adv_data, &adv_params);
-    APP_ERROR_CHECK(err_code);
-}
-
-/**@brief Function for starting advertising.
- */
-static void advertising_start(void)
+static void scan_start(void)
 {
     ret_code_t err_code;
 
-    err_code = sd_ble_gap_adv_start(m_adv_handle, APP_BLE_CONN_CFG_TAG);
+    err_code = nrf_ble_scan_start(&m_scan);
+    APP_ERROR_CHECK(err_code);
+}
+
+/**@brief Function for handling Scaning events.
+ *
+ * @param[in]   p_scan_evt   Scanning event.
+ */
+static void scan_evt_handler(scan_evt_t const * p_scan_evt)
+{
+    switch(p_scan_evt->scan_evt_id)
+    {
+        // Could not find device in scan, that is okay
+        case NRF_BLE_SCAN_EVT_NOT_FOUND:
+            NRF_LOG_INFO("Could not find device in scan");
+            break;
+
+        default:
+            NRF_LOG_INFO("event! %i", p_scan_evt->scan_evt_id);
+          break;
+    }
+}
+
+/**@brief Function for handling database discovery events.
+ *
+ * @details This function is callback function to handle events from the database discovery module.
+ *          Depending on the UUIDs that are discovered, this function should forward the events
+ *          to their respective services.
+ *
+ * @param[in] p_event  Pointer to the database discovery event.
+ */
+static void db_disc_handler(ble_db_discovery_evt_t * p_evt)
+{
+    NRF_LOG_INFO("db disk handler!");
+}
+
+/**@brief Database discovery initialization.
+ */
+static void db_discovery_init(void)
+{
+    ble_db_discovery_init_t db_init;
+
+    memset(&db_init, 0, sizeof(db_init));
+
+    db_init.evt_handler  = db_disc_handler;
+    db_init.p_gatt_queue = &m_ble_gatt_queue;
+
+    ret_code_t err_code = ble_db_discovery_init(&db_init);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+static void scan_init(void)
+{
+    ret_code_t          err_code;
+    nrf_ble_scan_init_t init_scan;
+
+    memset(&init_scan, 0, sizeof(init_scan));
+
+    init_scan.connect_if_match = false;
+    init_scan.conn_cfg_tag     = APP_BLE_CONN_CFG_TAG;
+
+    err_code = nrf_ble_scan_init(&m_scan, &init_scan, scan_evt_handler);
     APP_ERROR_CHECK(err_code);
 
-    err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING);
+    // Setting filters for scanning.
+    err_code = nrf_ble_scan_filters_enable(&m_scan, NRF_BLE_SCAN_NAME_FILTER, false);
     APP_ERROR_CHECK(err_code);
+
+    err_code = nrf_ble_scan_filter_set(&m_scan, SCAN_NAME_FILTER, m_target_periph_name);
+    APP_ERROR_CHECK(err_code);
+}
+
+/**@brief Function for initializing the GATT module.
+ */
+static void gatt_init(void)
+{
+    ret_code_t err_code = nrf_ble_gatt_init(&m_gatt, NULL);
+    APP_ERROR_CHECK(err_code);
+}
+
+temperature_sensor_data_t bluetooth_get_outside_temperature() {
+    temperature_sensor_data_t data = {0};
+    (void)data;
+
+    // 1. scan ble advertisements
+    scan_start();
+
+    // 2. filter based on fullname
+
+    // 3. extract the sensor data from the advertisement
+
+    return data;
 }
 
 /**@brief Function for initializing the BLE stack.
@@ -139,43 +184,9 @@ static void ble_stack_init(void)
 void bluetooth_init() {
     ble_stack_init();
 
-    advertising_init();
-}
+    scan_init();
 
+    gatt_init();
 
-void bluetooth_start_advertisement() {
-    advertising_start();
-}
-
-
-void bluetooth_update_advertisement_data(const temperature_sensor_data_t * const data) {
-    static unsigned int counter = 1;
-    ble_gap_adv_data_t new_adv_data;
-    ret_code_t ret;
-
-    NRFX_ASSERT(data != NULL);
-
-    // Update temperature
-    m_beacon_info.humidity = data->humidity;
-    m_beacon_info.temperature = data->temperature;
-
-    memset(&new_adv_data, 0, sizeof(new_adv_data));
-
-    // We can't pass the same buffer twice, so alternate the two buffers
-    // A limitation of the Nordic API
-    if(counter == 1) {
-        new_adv_data.adv_data.p_data = m_enc_advdata2;
-        counter = 2;
-    } else {
-        new_adv_data.adv_data.p_data = m_enc_advdata1;
-        counter = 1;
-    }
-
-    new_adv_data.adv_data.len = BLE_GAP_ADV_SET_DATA_SIZE_MAX;
-
-    ret = ble_advdata_encode(&advdata, new_adv_data.adv_data.p_data, &new_adv_data.adv_data.len);
-    APP_ERROR_CHECK(ret);
-
-    ret = sd_ble_gap_adv_set_configure(&m_adv_handle, &new_adv_data, NULL);
-    APP_ERROR_CHECK(ret);
+    db_discovery_init();
 }
