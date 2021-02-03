@@ -3,11 +3,11 @@ Code to run on the nRF52832 from sparkfun  (https://www.sparkfun.com/products/13
 
 This sensor measures the temperature and transmits that data in a bluetooth advertisement (beaconing)
 
-The makefile supports the following command:
-make                    - Build the code
-make flash_softdevice   - flash the softdevice onto the MCU
-make sdk_config         - start external tool for editing sdk_config.h
-make flash              - flashing binary
+The makefile supports the following commands:
+ - make                    - Build the code
+ - make flash_softdevice   - flash the softdevice onto the MCU
+ - make sdk_config         - start external tool for editing sdk_config.h
+ - make flash              - flashing binary
 
 The following tools are required:
 make
