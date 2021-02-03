@@ -1,7 +1,7 @@
 # outside-temperature-sensor
 Code to run on the nRF52832 from sparkfun  (https://www.sparkfun.com/products/13990)
 
-This sensor measures the temperature and transmits that data in a bluetooth advertisement (beaconing)
+This sensor measures the temperature and receives the outside temperature from the [outside-temperature-sensor](https://github.com/Lucan11/outside-temperature-sensor)
 
 The makefile supports the following commands:
  - make                    - Build the code
