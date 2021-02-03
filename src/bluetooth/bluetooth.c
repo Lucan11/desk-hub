@@ -18,11 +18,11 @@
 #define NON_CONNECTABLE_ADV_INTERVAL    MSEC_TO_UNITS(100, UNIT_0_625_MS)
 #define DEVICE_NAME                     ((uint8_t const *)"tempsensor")
 
-
 /**< Advertising handle used to identify an advertising set. */
 static uint8_t m_adv_handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;
 /**< Buffer for storing an encoded advertising set. */
-static uint8_t m_enc_advdata[BLE_GAP_ADV_SET_DATA_SIZE_MAX];
+static uint8_t m_enc_advdata1[BLE_GAP_ADV_SET_DATA_SIZE_MAX];
+static uint8_t m_enc_advdata2[BLE_GAP_ADV_SET_DATA_SIZE_MAX];
 
 // Not sure which of these need to be double to update the advertisement data, so double them al for now
 static ble_advdata_t        advdata;
@@ -32,7 +32,7 @@ static ble_advdata_manuf_data_t manuf_specific_data;
 /**@brief Struct that contains pointers to the encoded advertising data. */
 static ble_gap_adv_data_t m_adv_data = {
     .adv_data = {
-            .p_data = m_enc_advdata,
+            .p_data = m_enc_advdata1,
             .len = BLE_GAP_ADV_SET_DATA_SIZE_MAX
     },
     .scan_rsp_data =  {
@@ -63,6 +63,7 @@ static void advertising_init(void) {
     ret_code_t           err_code;
     ble_gap_conn_sec_mode_t sec_mode;
 
+
     // Set the device name
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
     err_code = sd_ble_gap_device_name_set(&sec_mode, DEVICE_NAME, strlen((const char*)DEVICE_NAME));
@@ -77,7 +78,7 @@ static void advertising_init(void) {
     advdata.flags              = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
 
     advdata.p_manuf_specific_data = &manuf_specific_data;
-    advdata.p_manuf_specific_data->company_identifier = 0xFFFF;
+    advdata.p_manuf_specific_data->company_identifier = 0x0059; //0xFFFF
     advdata.p_manuf_specific_data->data.p_data = (uint8_t*)&m_beacon_info;
     advdata.p_manuf_specific_data->data.size = sizeof(m_beacon_info);
     err_code = ble_advdata_encode(&advdata, m_adv_data.adv_data.p_data, &m_adv_data.adv_data.len);
@@ -148,14 +149,36 @@ void bluetooth_start_advertisement() {
 
 
 void bluetooth_update_advertisement_data(const temperature_sensor_data_t * const data) {
+    static unsigned int counter = 1;
+    ble_gap_adv_data_t new_adv_data;
+    ret_code_t ret;
+
     NRFX_ASSERT(data != NULL);
 
-    m_beacon_info.humidity = data->humidity;
-    m_beacon_info.temperature = data->temperature;
+    // Update temperature
+    // m_beacon_info.humidity = data->humidity;
+    // m_beacon_info.temperature = data->temperature;
 
-    // Not the most efficient way to update the advertising data
-    // only need to call ble_advdata_encode and sd_ble_gap_adv_set_configure, I think.
-    // update_advertising_data(advdata, adv_params, manuf_specific_data);
+    m_beacon_info.humidity++;
+    m_beacon_info.temperature++;
 
-    // ble_advertising_advdata_update();
+    memset(&new_adv_data, 0, sizeof(new_adv_data));
+
+    // We can't pass the same buffer twice, so alternate the two buffers
+    // A limitation of the Nordic API
+    if(counter == 1) {
+        new_adv_data.adv_data.p_data = m_enc_advdata2;
+        counter = 2;
+    } else {
+        new_adv_data.adv_data.p_data = m_enc_advdata1;
+        counter = 1;
+    }
+
+    new_adv_data.adv_data.len = BLE_GAP_ADV_SET_DATA_SIZE_MAX;
+
+    ret = ble_advdata_encode(&advdata, new_adv_data.adv_data.p_data, &new_adv_data.adv_data.len);
+    APP_ERROR_CHECK(ret);
+
+    ret = sd_ble_gap_adv_set_configure(&m_adv_handle, &new_adv_data, NULL);
+    APP_ERROR_CHECK(ret);
 }
