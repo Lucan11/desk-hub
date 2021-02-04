@@ -27,21 +27,7 @@
 #include "Si7021.h"
 
 
-#define CENTRAL_SCANNING_LED            BSP_BOARD_LED_0                     /**< Scanning LED will be on when the device is scanning. */
-#define CENTRAL_CONNECTED_LED           BSP_BOARD_LED_1                     /**< Connected LED will be on when the device is connected. */
-#define LEDBUTTON_LED                   BSP_BOARD_LED_2                     /**< LED to indicate a change of state of the the Button characteristic on the peer. */
-
-#define SCAN_INTERVAL                   0x00A0                              /**< Determines scan interval in units of 0.625 millisecond. */
-#define SCAN_WINDOW                     0x0050                              /**< Determines scan window in units of 0.625 millisecond. */
-#define SCAN_DURATION                   0x0000                              /**< Timout when scanning. 0x0000 disables timeout. */
-
-#define MIN_CONNECTION_INTERVAL         MSEC_TO_UNITS(7.5, UNIT_1_25_MS)    /**< Determines minimum connection interval in milliseconds. */
-#define MAX_CONNECTION_INTERVAL         MSEC_TO_UNITS(30, UNIT_1_25_MS)     /**< Determines maximum connection interval in milliseconds. */
-#define SLAVE_LATENCY                   0                                   /**< Determines slave latency in terms of connection events. */
-#define SUPERVISION_TIMEOUT             MSEC_TO_UNITS(4000, UNIT_10_MS)     /**< Determines supervision time-out in units of 10 milliseconds. */
-
 #define APP_BLE_CONN_CFG_TAG            1                                   /**< A tag identifying the SoftDevice BLE configuration. */
-#define APP_BLE_OBSERVER_PRIO           3                                   /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 
 NRF_BLE_SCAN_DEF(m_scan);                                       /**< Scanning module instance. */
 NRF_BLE_GATT_DEF(m_gatt);                                       /**< GATT module instance. */
@@ -76,9 +62,11 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
     {
         // Could not find device in scan, that is okay
         case NRF_BLE_SCAN_EVT_NOT_FOUND:
-            NRF_LOG_INFO("Could not find device in scan");
+            //NRF_LOG_INFO("Could not find device in scan");
             break;
-
+        case NRF_BLE_SCAN_EVT_FILTER_MATCH:
+            NRF_LOG_INFO("found device!");
+            break;
         default:
             NRF_LOG_INFO("event! %i", p_scan_evt->scan_evt_id);
           break;
@@ -114,13 +102,21 @@ static void db_discovery_init(void)
 }
 
 
+// static ble_gap_scan_params_t params;
 static void scan_init(void)
 {
     ret_code_t          err_code;
     nrf_ble_scan_init_t init_scan;
+    // ble_gap_scan_params_t params;
 
     memset(&init_scan, 0, sizeof(init_scan));
+    // memset(&params, 0x00, sizeof(params));
 
+    // params.extended = 1;
+    // params.interval = SCAN_INTERVAL;
+    // params.window = SCAN_WINDOW;
+
+    // init_scan.p_scan_param = &params;
     init_scan.connect_if_match = false;
     init_scan.conn_cfg_tag     = APP_BLE_CONN_CFG_TAG;
 

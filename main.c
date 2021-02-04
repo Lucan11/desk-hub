@@ -28,7 +28,7 @@ int main(void) {
         idle_state_handle();
 
         // Make this a timer later
-        if(i % 5 == 0) {
+        if(i % 10 == 0) {
             sensor_values_inside = temperature_sensor_read();
             sensor_values_outside = bluetooth_get_outside_temperature();
 
