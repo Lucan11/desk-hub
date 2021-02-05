@@ -7,6 +7,7 @@
 #include "bluetooth.h"
 #include "log.h"
 #include "Si7021.h"
+#include "ST7735.h"
 
 
 
@@ -37,9 +38,13 @@ void init(){
     timers_init();
     leds_init();
     power_management_init();
+
+    NRF_LOG_INFO("init bluetooth");
+    log_flush(); // make sure everything is flushed, for if we hardfault
     bluetooth_init();
 
     temperature_sensor_init();
+    display_init();
 
     NRF_LOG_INFO("Desk hub initialized");
 }
