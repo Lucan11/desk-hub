@@ -6,7 +6,7 @@
 void log_init();
 
 // If deferred loggin is enabled, call this function to actually log the data
-uint8_t log_flush();
+void log_flush();
 
 
 #endif//_LOG_H_

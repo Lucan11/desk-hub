@@ -30,6 +30,6 @@ void log_init(void)
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
-uint8_t log_flush() {
-    return NRF_LOG_PROCESS();
+void log_flush() {
+    while (NRF_LOG_PROCESS() == true) { ; }
 }

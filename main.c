@@ -8,11 +8,10 @@
 
 static void idle_state_handle(void)
 {
-    // Process log entries if there are any, otherwise sleep
-    if (log_flush() == false)
-    {
-        nrf_pwr_mgmt_run();
-    }
+    // Process log entries if there are any, then sleep
+    log_flush();
+
+    nrf_pwr_mgmt_run();
 }
 
 
