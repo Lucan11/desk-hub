@@ -27,7 +27,7 @@
 #include "Si7021.h"
 
 
-#define APP_BLE_CONN_CFG_TAG            1                                   /**< A tag identifying the SoftDevice BLE configuration. */
+#define APP_BLE_CONN_CFG_TAG            1                       /**< A tag identifying the SoftDevice BLE configuration. */
 
 NRF_BLE_SCAN_DEF(m_scan);                                       /**< Scanning module instance. */
 NRF_BLE_GATT_DEF(m_gatt);                                       /**< GATT module instance. */
@@ -36,8 +36,12 @@ NRF_BLE_GQ_DEF(m_ble_gatt_queue,                                /**< BLE GATT Qu
                NRF_SDH_BLE_CENTRAL_LINK_COUNT,
                NRF_BLE_GQ_QUEUE_SIZE);
 
-static const char m_target_periph_name[] = "tempsensor";     /**< Name of the device we try to connect to. This name is searched in the scan report data*/
+static const char m_target_periph_name[] = "tempsensor";        /**< Name of the device we try to connect to. This name is searched in the scan report data*/
 
+// This data structure is accessed in the scan_evt_handler,
+// I'm not sure if this is an interrupt, thus make it volatile
+// just in case.
+static volatile temperature_sensor_data_t sensor_data = {0};
 
 static void scan_start();
 
@@ -56,19 +60,24 @@ static void scan_start(void)
  *
  * @param[in]   p_scan_evt   Scanning event.
  */
-static void scan_evt_handler(scan_evt_t const * p_scan_evt)
-{
+static void scan_evt_handler(scan_evt_t const * p_scan_evt) {
     switch(p_scan_evt->scan_evt_id)
     {
         // Could not find device in scan, that is okay
         case NRF_BLE_SCAN_EVT_NOT_FOUND:
-            //NRF_LOG_INFO("Could not find device in scan");
+            // NRF_LOG_INFO("Could not find device in scan");
             break;
+
+        // Found the device in the scan
         case NRF_BLE_SCAN_EVT_FILTER_MATCH:
             NRF_LOG_INFO("found device!");
+            // read the temperature and humidity from the advertising data
+            // sensor_data = ...
             break;
+
+
         default:
-            NRF_LOG_INFO("event! %i", p_scan_evt->scan_evt_id);
+            NRF_LOG_INFO("Unregistered event! %i", p_scan_evt->scan_evt_id);
           break;
     }
 }
@@ -140,17 +149,7 @@ static void gatt_init(void)
 }
 
 temperature_sensor_data_t bluetooth_get_outside_temperature() {
-    temperature_sensor_data_t data = {0};
-    (void)data;
-
-    // 1. scan ble advertisements
-    scan_start();
-
-    // 2. filter based on fullname
-
-    // 3. extract the sensor data from the advertisement
-
-    return data;
+    return sensor_data;
 }
 
 /**@brief Function for initializing the BLE stack.
@@ -185,4 +184,6 @@ void bluetooth_init() {
     gatt_init();
 
     db_discovery_init();
+
+    scan_start();
 }
