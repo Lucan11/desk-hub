@@ -5,6 +5,7 @@
 #include "nrf_delay.h"
 
 #include "log.h"
+#include "font.h"
 
 
 // These names are I2C, but the interface is actualy SPI
@@ -22,9 +23,16 @@
 #define POWER_UP_TIME_MS    120         // Time in ms that the device needs to power up after reset
 #define RESET_DOWN_TIME_US  10          // Time in us that the reset pin needs to be down for the reset to trigger
 
-#define DISPLAY_WIDTH       128
-#define DISPLAY_HIGHT       160
-#define DISPLAY_NUM_PIXELS  ((DISPLAY_WIDTH) * (DISPLAY_HIGHT))
+// The display size is not the max that the ST7735 can support (132x162)
+// The reported display size is 128x160, but I'm not sure if I missed a configuration in a register
+// But I need these offsets to be able to write from begin to end
+#define DISPLAY_X_START_OFFSET  ((uint8_t)2)
+#define DISPLAY_X_STOP_OFFSET   ((uint8_t)129)
+#define DISPLAY_Y_START_OFFSET  ((uint8_t)1)
+#define DISPLAY_Y_STOP_OFFSET   ((uint8_t)160)
+#define DISPLAY_WIDTH           (DISPLAY_X_STOP_OFFSET - DISPLAY_X_START_OFFSET)
+#define DISPLAY_HIGHT           (DISPLAY_Y_STOP_OFFSET - DISPLAY_Y_START_OFFSET)
+#define DISPLAY_NUM_PIXELS      ((DISPLAY_WIDTH) * (DISPLAY_HIGHT) * 2)
 
 
 #define PIXEL_RED_BITS          5
@@ -33,6 +41,44 @@
 #define PIXEL_RED_MAX_VALUE     31
 #define PIXEL_GREEN_MAX_VALUE   63
 #define PIXEL_BLUE_MAX_VALUE    31
+
+
+#define SWRESET 0x01
+#define RDDID   0x04
+#define RDDST   0x09
+#define SLPIN   0x10
+#define SLPOUT  0x11
+#define PTLON   0x12
+#define NORON   0x13
+#define INVOFF  0x20
+#define INVON   0x21
+#define DISPOFF 0x28
+#define DISPON  0x29
+#define RAMRD   0x2E
+#define CASET   0x2A
+#define RASET   0x2B
+#define RAMWR   0x2C
+#define PTLAR   0x30
+#define MADCTL  0x36
+#define COLMOD  0x3A
+#define FRMCTR1 0xB1
+#define FRMCTR2 0xB2
+#define FRMCTR3 0xB3
+#define INVCTR  0xB4
+#define DISSET5 0xB6
+#define PWCTR1  0xC0
+#define PWCTR2  0xC1
+#define PWCTR3  0xC2
+#define PWCTR4  0xC3
+#define PWCTR5  0xC4
+#define VMCTR1  0xC5
+#define RDID1   0xDA
+#define RDID2   0xDB
+#define RDID3   0xDC
+#define RDID4   0xDD
+#define GMCTRP1 0xE0
+#define GMCTRN1 0xE1
+#define PWCTR6  0xFC
 
 
 // 5-6-5 RGB configuration
@@ -74,17 +120,17 @@ static void display_spi_init();
 static void display_spi_event_handler(nrfx_spi_evt_t const * p_event, void * p_context);
 static void display_reset();
 static inline void pixel_set_color(pixel_t * const pixel, pixel_colors_t color, const uint8_t value);
-static inline void send_framebuffer();
 static inline void wait_for_transfer();
 static inline void send_command(uint8_t command);
 static inline void send_data(uint8_t data);
+static inline void display_clear(const pixel_t * const color);
+
 
 static volatile unsigned int transfer_done = 0;
 static inline void wait_for_transfer() {
     // NRF_LOG_INFO("waiting for transfer!");
     while (transfer_done == 0) {
         // maybe sleep here
-        log_flush();
     }
 
     transfer_done = 0;
@@ -120,23 +166,15 @@ static inline void send_data(uint8_t data) {
 }
 
 
-static inline void send_framebuffer() {
+static inline void display_clear(const pixel_t * const color) {
     nrfx_err_t err;
-    pixel_t pixel;
-    const nrfx_spi_xfer_desc_t xfer = NRFX_SPI_XFER_TX(&pixel.raw_data, 2);
-
-    memset(&pixel.raw_data, 0x00, sizeof(uint16_t));
+    const nrfx_spi_xfer_desc_t xfer = NRFX_SPI_XFER_TX(&color->raw_data, 2);
 
     // Memory write command
-    send_command(0x2C);
+    send_command(RAMWR);
 
     // Set some colors
     for(uint16_t i = 0; i < DISPLAY_NUM_PIXELS; i++){
-        pixel.raw_data = i;
-        // pixel_set_color(&pixel, red, PIXEL_RED_MAX_VALUE);
-        // pixel_set_color(&pixel, green, PIXEL_GREEN_MAX_VALUE);
-        // pixel_set_color(&pixel, blue, PIXEL_BLUE_MAX_VALUE);
-
         // send the buffer
         err = nrfx_spi_xfer(&instance, &xfer, 0);
         APP_ERROR_CHECK(err);
@@ -189,7 +227,7 @@ static void display_reset(){
     nrf_delay_ms(POWER_UP_TIME_MS); // Not sure if this one also needs to be this long
 
     // software reset
-    send_command(0x01);
+    send_command(SWRESET);
 
     nrf_delay_ms(POWER_UP_TIME_MS);
 }
@@ -251,16 +289,43 @@ void display_init() {
     NRFX_ASSERT(test_pixel.colors.blue == 0b10101);
 
     // Go out of sleep mode
-    send_command(0x11);
+    send_command(SLPOUT);
 
     // 16 bit per pixel command
-    send_command(0x3A);
+    send_command(COLMOD);
     // Set register
     send_data(0b00000101);
 
+    send_command(MADCTL);
+    send_data(0b11000000);
+
+    send_command(CASET);
+    send_data(0x00);
+    send_data(128);
+
+    send_command(CASET);
+    send_data(0x00);
+    send_data(DISPLAY_X_START_OFFSET);
+    send_data(0x00);
+    send_data(DISPLAY_X_STOP_OFFSET);
+
+    send_command(RASET);
+    send_data(0x00);
+    send_data(DISPLAY_Y_START_OFFSET);
+    send_data(0x00);
+    send_data(DISPLAY_Y_STOP_OFFSET);
+
     // Turn the screen on
-    send_command(0x29);
+    send_command(DISPON);
 
+    pixel_t pixel = {0};
+    // pixel_set_color(&pixel, red, PIXEL_RED_MAX_VALUE);
+    // pixel_set_color(&pixel, green, PIXEL_GREEN_MAX_VALUE);
+    pixel_set_color(&pixel, blue, PIXEL_BLUE_MAX_VALUE);
+    display_clear(&pixel);
 
-    send_framebuffer();
+    pixel_set_color(&pixel, red, PIXEL_RED_MAX_VALUE);
+    pixel_set_color(&pixel, green, 0);
+    pixel_set_color(&pixel, blue, 0);
+    display_clear(&pixel);
 }

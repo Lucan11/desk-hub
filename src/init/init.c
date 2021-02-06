@@ -39,9 +39,13 @@ void init(){
     leds_init();
     power_management_init();
 
+    // The bluetooth has the tendency to hardfault very often
+    // To make sure we can see that it has actually finished, log before and after
     NRF_LOG_INFO("init bluetooth");
-    log_flush(); // make sure everything is flushed, for if we hardfault
+    log_flush();
     bluetooth_init();
+    NRF_LOG_INFO("init bluetooth done");
+    log_flush();
 
     temperature_sensor_init();
     display_init();
