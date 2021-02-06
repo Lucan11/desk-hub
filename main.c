@@ -7,6 +7,7 @@
 #include "init.h"
 #include "Si7021.h"
 #include "bluetooth.h"
+#include "display.h"
 
 
 
@@ -57,6 +58,8 @@ int main(void) {
 
             NRF_LOG_INFO("Temp inside: %i outside: %i", sensor_values_inside.temperature, sensor_values_outside.temperature);
             NRF_LOG_INFO("Humidity inside: %i outside: %i", sensor_values_inside.humidity, sensor_values_outside.humidity);
+
+            display_set_sensor_data(&sensor_values_inside);
 
             reading = 0;
         }

@@ -7,7 +7,7 @@
 #include "bluetooth.h"
 #include "log.h"
 #include "Si7021.h"
-#include "ST7735.h"
+#include "display.h"
 
 
 

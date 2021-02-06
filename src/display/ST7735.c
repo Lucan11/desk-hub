@@ -23,16 +23,18 @@
 #define POWER_UP_TIME_MS    120         // Time in ms that the device needs to power up after reset
 #define RESET_DOWN_TIME_US  10          // Time in us that the reset pin needs to be down for the reset to trigger
 
+
 // The display size is not the max that the ST7735 can support (132x162)
-// The reported display size is 128x160, but I'm not sure if I missed a configuration in a register
-// But I need these offsets to be able to write from begin to end
+// The reported display size is 128x160, but I'm not sure if I missed a
+// configuration in a register. But I need these offsets to be able to
+// write from begin to end, otherwise we write outside of the display bounds
 #define DISPLAY_X_START_OFFSET  ((uint8_t)2)
 #define DISPLAY_X_STOP_OFFSET   ((uint8_t)129)
 #define DISPLAY_Y_START_OFFSET  ((uint8_t)1)
 #define DISPLAY_Y_STOP_OFFSET   ((uint8_t)160)
 #define DISPLAY_WIDTH           (DISPLAY_X_STOP_OFFSET - DISPLAY_X_START_OFFSET)
 #define DISPLAY_HIGHT           (DISPLAY_Y_STOP_OFFSET - DISPLAY_Y_START_OFFSET)
-#define DISPLAY_NUM_PIXELS      ((DISPLAY_WIDTH) * (DISPLAY_HIGHT) * 2)
+#define DISPLAY_NUM_PIXELS      ((DISPLAY_WIDTH + 1) * (DISPLAY_HIGHT + 1))
 
 
 #define PIXEL_RED_BITS          5
@@ -81,49 +83,32 @@
 #define PWCTR6  0xFC
 
 
-// 5-6-5 RGB configuration
-typedef struct _pixel {
-    union
-    {
-        uint16_t raw_data;
-
-        // The data needs to be send as follows:
-        // Start                 --->                   end
-        // D7 D6 D5 D4 D3 D2 D1 D0  D7 D6 D5 D4 D3 D2 D1 D0
-        // R4 R3 R2 R1 R0 G5 G4 G3  G2 G1 G0 B4 B3 B2 B1 B0
-        // Due to the endieness of the chip, this is the way we structure it.
-        struct {
-            uint16_t green_high : 3;
-            uint16_t red : 5;
-            uint16_t blue : 5;
-            uint16_t green_low : 3;
-        } colors;
-    };
-} PACKED pixel_t;
-
-
-typedef enum _pixel_colors {
-    red,
-    green,
-    blue
-} pixel_colors_t;
-
 // SPI and I2C use the same hardware, so use SPI1 instead of 0
 static nrfx_spi_t instance = NRFX_SPI_INSTANCE(1);
 
-//~40KB way too big to buffer in RAM
-// static pixel_t display_buffer[DISPLAY_NUM_PIXELS] = {0};
 
 
-static void display_gpio_init();
-static void display_spi_init();
-static void display_spi_event_handler(nrfx_spi_evt_t const * p_event, void * p_context);
-static void display_reset();
+struct _current_bounds {
+    uint8_t xs;
+    uint8_t xe;
+    uint8_t ys;
+    uint8_t ye;
+    uint8_t xdim;
+    uint8_t ydim;
+    uint16_t num_pixels;
+} static current_bounds;
+
+
+static void ST7735_gpio_init();
+static void ST7735_spi_init();
+static void ST7735_spi_event_handler(nrfx_spi_evt_t const * p_event, void * p_context);
+static void ST7735_reset();
+static void display_configure();
 static inline void pixel_set_color(pixel_t * const pixel, pixel_colors_t color, const uint8_t value);
 static inline void wait_for_transfer();
-static inline void send_command(uint8_t command);
-static inline void send_data(uint8_t data);
-static inline void display_clear(const pixel_t * const color);
+static inline void ST7735_send_command(uint8_t command);
+static inline void ST7735_send_data(uint8_t data);
+static inline void transfer_pixel(const pixel_t * const pixel);
 
 
 static volatile unsigned int transfer_done = 0;
@@ -137,7 +122,81 @@ static inline void wait_for_transfer() {
 }
 
 
-static inline void send_command(uint8_t command) {
+// Need to send the RAMRW command before this function!
+static inline void transfer_pixel(const pixel_t * const pixel) {
+    nrfx_err_t err;
+    const nrfx_spi_xfer_desc_t xfer = NRFX_SPI_XFER_TX(&pixel->raw_data, 2);
+
+    err = nrfx_spi_xfer(&instance, &xfer, 0);
+    APP_ERROR_CHECK(err);
+
+    wait_for_transfer();
+}
+
+
+
+void ST7735_draw_character( const uint8_t x,
+                            const uint8_t y,
+                            const char character) {
+    pixel_t pixel = {0};
+
+    ST7735_set_draw_area(x, x + DISPLAY_CHAR_WIDTH, y, y + DISPLAY_CHAR_WIDTH);
+
+    ST7735_set_color(&pixel);
+
+    // Memory write command
+    ST7735_send_command(RAMWR);
+
+    for (size_t i = 0; i < DISPLAY_CHAR_WIDTH; i++) {
+        for (size_t j = 0; j < DISPLAY_CHAR_WIDTH; j++) {
+            if((FONTS[character - 32][i] >> j) & 0x1)
+                pixel_set_color(&pixel, red, PIXEL_RED_MAX_VALUE);
+            else
+                pixel.raw_data = 0xffff;
+
+            transfer_pixel(&pixel);
+        }
+    }
+}
+
+
+
+void ST7735_set_draw_area(  const uint8_t xs,
+                            const uint8_t xe,
+                            const uint8_t ys,
+                            const uint8_t ye)
+{
+    // Ensure that we are within bounds
+    NRFX_ASSERT(xs >= DISPLAY_X_START_OFFSET);
+    NRFX_ASSERT(xe <= DISPLAY_X_STOP_OFFSET);
+    NRFX_ASSERT(ys >= DISPLAY_Y_START_OFFSET);
+    NRFX_ASSERT(ye <= DISPLAY_Y_STOP_OFFSET);
+
+    // Update the bounds parameters
+    current_bounds.xs = xs;
+    current_bounds.xe = xe;
+    current_bounds.ys = ys;
+    current_bounds.ye = ye;
+    current_bounds.xdim = current_bounds.xe - current_bounds.xs + 1;
+    current_bounds.ydim = current_bounds.ye - current_bounds.ys + 1;
+    current_bounds.num_pixels = current_bounds.xdim * current_bounds.ydim;
+
+    // Set the column (xs - xe)
+    ST7735_send_command(CASET);
+    ST7735_send_data(0x00);
+    ST7735_send_data(xs);
+    ST7735_send_data(0x00);
+    ST7735_send_data(xe);
+
+    // Set the row (ys - ye)
+    ST7735_send_command(RASET);
+    ST7735_send_data(0x00);
+    ST7735_send_data(ys);
+    ST7735_send_data(0x00);
+    ST7735_send_data(ye);
+}
+
+static inline void ST7735_send_command(uint8_t command) {
     nrfx_err_t err;
     const nrfx_spi_xfer_desc_t xfer = NRFX_SPI_XFER_TX(&command, 1);
 
@@ -152,7 +211,7 @@ static inline void send_command(uint8_t command) {
 }
 
 
-static inline void send_data(uint8_t data) {
+static inline void ST7735_send_data(uint8_t data) {
     nrfx_err_t err;
     const nrfx_spi_xfer_desc_t xfer = NRFX_SPI_XFER_TX(&data, 1);
 
@@ -166,20 +225,13 @@ static inline void send_data(uint8_t data) {
 }
 
 
-static inline void display_clear(const pixel_t * const color) {
-    nrfx_err_t err;
-    const nrfx_spi_xfer_desc_t xfer = NRFX_SPI_XFER_TX(&color->raw_data, 2);
+void ST7735_set_color(const pixel_t * const color) {
 
     // Memory write command
-    send_command(RAMWR);
+    ST7735_send_command(RAMWR);
 
-    // Set some colors
-    for(uint16_t i = 0; i < DISPLAY_NUM_PIXELS; i++){
-        // send the buffer
-        err = nrfx_spi_xfer(&instance, &xfer, 0);
-        APP_ERROR_CHECK(err);
-
-        wait_for_transfer();
+    for(uint16_t i = 0; i < current_bounds.num_pixels; i++){
+        transfer_pixel(color);
     }
 }
 
@@ -210,13 +262,13 @@ static inline void pixel_set_color(pixel_t * const pixel, const pixel_colors_t c
 }
 
 
-static void display_spi_event_handler(nrfx_spi_evt_t const * p_event, void * p_context) {
+static void ST7735_spi_event_handler(nrfx_spi_evt_t const * p_event, void * p_context) {
     // nrfx_spi_1_irq_handler();
     transfer_done = 1;
 }
 
 
-static void display_reset(){
+static void ST7735_reset(){
     // First hw reset
     nrf_gpio_pin_clear(RESET_PIN);
 
@@ -227,13 +279,13 @@ static void display_reset(){
     nrf_delay_ms(POWER_UP_TIME_MS); // Not sure if this one also needs to be this long
 
     // software reset
-    send_command(SWRESET);
+    ST7735_send_command(SWRESET);
 
     nrf_delay_ms(POWER_UP_TIME_MS);
 }
 
 
-static void display_gpio_init() {
+static void ST7735_gpio_init() {
     // Configure the gpio pins as output
     nrf_gpio_cfg_output(RESET_PIN);
     nrf_gpio_cfg_output(DATA_COMMAND_PIN);
@@ -246,7 +298,7 @@ static void display_gpio_init() {
 }
 
 
-static void display_spi_init() {
+static void ST7735_spi_init() {
     nrfx_err_t err;
 
     const nrfx_spi_config_t config  = {
@@ -263,69 +315,35 @@ static void display_spi_init() {
 
     err = nrfx_spi_init(&instance,
                         &config,
-                        display_spi_event_handler,
+                        ST7735_spi_event_handler,
                         NULL);
     APP_ERROR_CHECK(err);
 }
 
-
-void display_init() {
-    pixel_t test_pixel;
-
-    display_gpio_init();
-
-    display_spi_init();
-
-    display_reset();
-
-    // test pixel colors alignmnet
-    pixel_set_color(&test_pixel, red, 0b10101);
-    pixel_set_color(&test_pixel, green, 0b111111);
-    pixel_set_color(&test_pixel, blue, 0b10101);
-
-    // NRFX_ASSERT(test_pixel.raw_data == ((0b10101 << 11) | (0b111111 << 5) | (0b10101)));
-    NRFX_ASSERT(test_pixel.colors.red == 0b10101);
-    // NRFX_ASSERT(test_pixel.colors.green == 0b111111);
-    NRFX_ASSERT(test_pixel.colors.blue == 0b10101);
-
+static void display_configure() {
     // Go out of sleep mode
-    send_command(SLPOUT);
+    ST7735_send_command(SLPOUT);
 
-    // 16 bit per pixel command
-    send_command(COLMOD);
-    // Set register
-    send_data(0b00000101);
+    // 16 bit per pixel command (RGB-5-6-5)
+    ST7735_send_command(COLMOD);
+    ST7735_send_data(0b00000101);
 
-    send_command(MADCTL);
-    send_data(0b11000000);
-
-    send_command(CASET);
-    send_data(0x00);
-    send_data(128);
-
-    send_command(CASET);
-    send_data(0x00);
-    send_data(DISPLAY_X_START_OFFSET);
-    send_data(0x00);
-    send_data(DISPLAY_X_STOP_OFFSET);
-
-    send_command(RASET);
-    send_data(0x00);
-    send_data(DISPLAY_Y_START_OFFSET);
-    send_data(0x00);
-    send_data(DISPLAY_Y_STOP_OFFSET);
+    // Set the correct bounds, such that we dont write out of bounds
+    ST7735_set_draw_area(   DISPLAY_X_START_OFFSET,
+                            DISPLAY_X_STOP_OFFSET,
+                            DISPLAY_Y_START_OFFSET,
+                            DISPLAY_Y_STOP_OFFSET);
 
     // Turn the screen on
-    send_command(DISPON);
+    ST7735_send_command(DISPON);
+}
 
-    pixel_t pixel = {0};
-    // pixel_set_color(&pixel, red, PIXEL_RED_MAX_VALUE);
-    // pixel_set_color(&pixel, green, PIXEL_GREEN_MAX_VALUE);
-    pixel_set_color(&pixel, blue, PIXEL_BLUE_MAX_VALUE);
-    display_clear(&pixel);
+void ST7735_init() {
+    ST7735_gpio_init();
 
-    pixel_set_color(&pixel, red, PIXEL_RED_MAX_VALUE);
-    pixel_set_color(&pixel, green, 0);
-    pixel_set_color(&pixel, blue, 0);
-    display_clear(&pixel);
+    ST7735_spi_init();
+
+    ST7735_reset();
+
+    display_configure();
 }
