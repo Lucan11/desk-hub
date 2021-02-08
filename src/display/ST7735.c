@@ -235,24 +235,23 @@ void ST7735_fill_bounds(const pixel_t * const color) {
 }
 
 // TODO: set value to a percentage (0 - COLOR_MAX)
-void pixel_set_color(pixel_t * const pixel, const pixel_colors_t color, const uint8_t value) {
+void pixel_set_color(pixel_t * const pixel, const pixel_colors_t color, const uint8_t percentage) {
     NRFX_ASSERT(pixel != NULL);
+    NRFX_ASSERT(percentage <= 100);
 
     switch (color) {
     case red:
-        NRFX_ASSERT(value <= PIXEL_RED_MAX_VALUE);
-        pixel->colors.red = value;
+        pixel->colors.red = (PIXEL_RED_MAX_VALUE * percentage)/100;
         break;
 
-    case green:
-        NRFX_ASSERT(value <= PIXEL_GREEN_MAX_VALUE);
+    case green:;
+        uint8_t value = (PIXEL_GREEN_MAX_VALUE*percentage)/100;
         pixel->colors.green_high = (value & 0b111000) >> 3;
-        pixel->colors.green_low  = value & 0b000111;
+        pixel->colors.green_low  = (value & 0b000111);
         break;
 
     case blue:
-        NRFX_ASSERT(value <= PIXEL_BLUE_MAX_VALUE);
-        pixel->colors.blue = value;
+        pixel->colors.blue = (PIXEL_BLUE_MAX_VALUE * percentage)/100;
         break;
 
     default:

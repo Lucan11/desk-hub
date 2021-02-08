@@ -30,7 +30,7 @@ void display_init(){
 
     pixel_set_color(&color, red, 10);
     pixel_set_color(&color, green, 10);
-    pixel_set_color(&color, blue, 31);
+    pixel_set_color(&color, blue, 55);
 
     // Draw inside and outside at the top of the display
     ST7735_draw_string(ROW/2, FONT_NUM_ROWS, INSIDE_STR, &color, SCALE_BIG);
@@ -49,12 +49,11 @@ void display_init(){
 void display_set_sensor_data(   const temperature_sensor_data_t * const inside_data,
                                 const temperature_sensor_data_t * const outside_data) {
     char buffer[5];
-    const pixel_t color = {
-        .colors.red = 10,
-        .colors.blue = 31,
-        .colors.green_high = (10 & 0b111000) >> 3,
-        .colors.green_low = 10 & 0b000111
-    };
+    pixel_t color;
+
+    pixel_set_color(&color, red, 10);
+    pixel_set_color(&color, green, 10);
+    pixel_set_color(&color, blue, 55);
 
     // This offset is the size of the TEMP/HUMI string
     uint8_t y_offset = FONT_NUM_ROWS + (strlen(TEMP_STR) * FONT_NUM_ROWS * SCALE_NORMAL);
