@@ -32,9 +32,9 @@
 #define DISPLAY_X_STOP_OFFSET   ((uint8_t)129)
 #define DISPLAY_Y_START_OFFSET  ((uint8_t)1)
 #define DISPLAY_Y_STOP_OFFSET   ((uint8_t)160)
-#define DISPLAY_WIDTH           (DISPLAY_X_STOP_OFFSET - DISPLAY_X_START_OFFSET)
-#define DISPLAY_HIGHT           (DISPLAY_Y_STOP_OFFSET - DISPLAY_Y_START_OFFSET)
-#define DISPLAY_NUM_PIXELS      ((DISPLAY_WIDTH + 1) * (DISPLAY_HIGHT + 1))
+#define DISPLAY_WIDTH           (DISPLAY_X_STOP_OFFSET - DISPLAY_X_START_OFFSET + 1)
+#define DISPLAY_HEIGHT          (DISPLAY_Y_STOP_OFFSET - DISPLAY_Y_START_OFFSET + 1)
+#define DISPLAY_NUM_PIXELS      ((DISPLAY_WIDTH) * (DISPLAY_HIGHT))
 
 
 #define PIXEL_RED_BITS          5
@@ -87,7 +87,8 @@
 static nrfx_spi_t instance = NRFX_SPI_INSTANCE(1);
 
 
-
+// Data structure to keep track of the current screen bounds
+// Used by functions that draw to the screen
 struct _current_bounds {
     uint8_t xs;
     uint8_t xe;
@@ -109,6 +110,7 @@ static inline void wait_for_transfer();
 static inline void ST7735_send_command(uint8_t command);
 static inline void ST7735_send_data(uint8_t data);
 static inline void transfer_pixel(const pixel_t * const pixel);
+void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len);
 
 
 static volatile unsigned int transfer_done = 0;
@@ -138,20 +140,26 @@ static inline void transfer_pixel(const pixel_t * const pixel) {
 void ST7735_draw_character( const uint8_t x,
                             const uint8_t y,
                             const char character) {
-    pixel_t pixel = {0};
+    pixel_t pixel = { .raw_data = 0xffff };
 
-    ST7735_set_draw_area(x, x + DISPLAY_CHAR_WIDTH, y, y + DISPLAY_CHAR_WIDTH);
-
+    // Set the bounds and make it white
+    ST7735_set_bounds(x, y, FONT_NUM_ROWS, FONT_NUM_ROWS);
     ST7735_set_color(&pixel);
 
     // Memory write command
     ST7735_send_command(RAMWR);
 
-    for (size_t i = 0; i < DISPLAY_CHAR_WIDTH; i++) {
-        for (size_t j = 0; j < DISPLAY_CHAR_WIDTH; j++) {
-            if((FONTS[character - 32][i] >> j) & 0x1)
+    // Iterate over every pixel in the character
+    for (size_t i = 0; i < FONT_NUM_ROWS; i++) {
+        for (size_t j = 0; j < FONT_NUM_ROWS; j++) {
+            // Set the color to red if we need to draw anything,
+            // Otherwise, make the pixel white (0xffff)
+            // Also, fuck using the cache, right?
+            if((font8x8_basic[(uint8_t)character][j] >> i) & 0x1) {
                 pixel_set_color(&pixel, red, PIXEL_RED_MAX_VALUE);
-            else
+                pixel_set_color(&pixel, green, 0);
+                pixel_set_color(&pixel, blue, 0);
+            } else
                 pixel.raw_data = 0xffff;
 
             transfer_pixel(&pixel);
@@ -159,41 +167,50 @@ void ST7735_draw_character( const uint8_t x,
     }
 }
 
+// Function to set the drawing bounds on the display
+// valid ranges:
+//      0 <= x < DISPLAY_WIDTH
+//      0 <= y < DISPLAY_HEIGHT
+//      0 < x_len <= DISPLAY_WIDTH
+//      0 < y_len <= DISPLAY_HEIGHT
+//      0 <= x + x_len < DISPLAY_WIDTH);
+//      0 <= y + y_len < DISPLAY_HEIGHT);
+void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len) {
+    NRF_LOG_INFO("x: %u, y: %u, x_len: %u, y_len: %u, max_x: %u, max_y: %u", x, y, x_len, y_len, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
-
-void ST7735_set_draw_area(  const uint8_t xs,
-                            const uint8_t xe,
-                            const uint8_t ys,
-                            const uint8_t ye)
-{
-    // Ensure that we are within bounds
-    NRFX_ASSERT(xs >= DISPLAY_X_START_OFFSET);
-    NRFX_ASSERT(xe <= DISPLAY_X_STOP_OFFSET);
-    NRFX_ASSERT(ys >= DISPLAY_Y_START_OFFSET);
-    NRFX_ASSERT(ye <= DISPLAY_Y_STOP_OFFSET);
+    NRFX_ASSERT(x + x_len <= DISPLAY_WIDTH);
+    NRFX_ASSERT(y + y_len <= DISPLAY_HEIGHT);
+    NRFX_ASSERT(x_len > 0);
+    NRFX_ASSERT(y_len > 0);
 
     // Update the bounds parameters
-    current_bounds.xs = xs;
-    current_bounds.xe = xe;
-    current_bounds.ys = ys;
-    current_bounds.ye = ye;
+    // Adjust for the offset to the display
+    current_bounds.xs = x + DISPLAY_X_START_OFFSET;
+    current_bounds.ys = y + DISPLAY_Y_START_OFFSET;
+
+    // Length is not inclusive, so remove one
+    current_bounds.xe = current_bounds.xs + x_len - 1;
+    current_bounds.ye = current_bounds.ys + y_len - 1;
+
     current_bounds.xdim = current_bounds.xe - current_bounds.xs + 1;
     current_bounds.ydim = current_bounds.ye - current_bounds.ys + 1;
-    current_bounds.num_pixels = current_bounds.xdim * current_bounds.ydim;
+    current_bounds.num_pixels = (current_bounds.xdim) * (current_bounds.ydim);
+
+    NRF_LOG_INFO("xs: %u, ys: %u, xe: %u, ye: %u", current_bounds.xs, current_bounds.ys, current_bounds.xe, current_bounds.ye);
 
     // Set the column (xs - xe)
     ST7735_send_command(CASET);
     ST7735_send_data(0x00);
-    ST7735_send_data(xs);
+    ST7735_send_data(current_bounds.xs);
     ST7735_send_data(0x00);
-    ST7735_send_data(xe);
+    ST7735_send_data(current_bounds.xe);
 
     // Set the row (ys - ye)
     ST7735_send_command(RASET);
     ST7735_send_data(0x00);
-    ST7735_send_data(ys);
+    ST7735_send_data(current_bounds.ys);
     ST7735_send_data(0x00);
-    ST7735_send_data(ye);
+    ST7735_send_data(current_bounds.ye);
 }
 
 static inline void ST7735_send_command(uint8_t command) {
@@ -329,10 +346,7 @@ static void display_configure() {
     ST7735_send_data(0b00000101);
 
     // Set the correct bounds, such that we dont write out of bounds
-    ST7735_set_draw_area(   DISPLAY_X_START_OFFSET,
-                            DISPLAY_X_STOP_OFFSET,
-                            DISPLAY_Y_START_OFFSET,
-                            DISPLAY_Y_STOP_OFFSET);
+    ST7735_set_bounds(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
     // Turn the screen on
     ST7735_send_command(DISPON);

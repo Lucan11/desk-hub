@@ -30,12 +30,6 @@ typedef enum _pixel_colors {
 } pixel_colors_t;
 
 
-void ST7735_set_draw_area(  const uint8_t xs,
-                            const uint8_t xe,
-                            const uint8_t ys,
-                            const uint8_t ye);
-
-
 void ST7735_draw_character(const uint8_t x, const uint8_t y, const char character);
 
 void ST7735_set_color(const pixel_t * const color);

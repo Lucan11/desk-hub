@@ -71,7 +71,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/queue/nrf_queue.c \
   $(PROJ_DIR)/src/display/ST7735.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_spi.c \
-  $(PROJ_DIR)/src/display/font.c \
   $(PROJ_DIR)/src/display/display.c \
 
 # Include folders common to all targets
