@@ -115,12 +115,12 @@ void ST7735_draw_character( const uint8_t x,
                             const size_t scale) {
     NRFX_ASSERT(character >= 0);
     NRFX_ASSERT(scale > 0);
+
     const pixel_t pixel = { .raw_data = 0xffff };
     const size_t x_len = FONT_NUM_ROWS * scale;
     const size_t y_len = FONT_NUM_ROWS * scale;
 
     pixel_t buffer[x_len][y_len];
-    memset(&buffer, 0xff, sizeof(buffer));
 
     // Set the bounds
     ST7735_set_bounds(x, y, x_len, y_len);
@@ -229,6 +229,8 @@ void ST7735_fill_bounds(const pixel_t * const color) {
     // Memory write command
     ST7735_send_command(RAMWR);
 
+    // We can speed this up if we use a small buffer to send more data at once
+    // skips initialization overhead of SPI transfer
     for(uint16_t i = 0; i < current_bounds.num_pixels; i++){
         transfer_pixel(color);
     }
@@ -263,6 +265,9 @@ void pixel_set_color(pixel_t * const pixel, const pixel_colors_t color, const ui
 
 
 static void ST7735_reset(){
+    // We need to do both a HW and SF reset since they reset different things
+    // Nether of them clears the RAM, be mindfull of this.
+
     // First hw reset
     nrf_gpio_pin_clear(RESET_PIN);
 
