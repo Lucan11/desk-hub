@@ -90,34 +90,40 @@ static inline void transfer_pixel(const pixel_t * const pixel);
 
 // Need to send the RAMRW command before this function!
 static inline void transfer_pixel(const pixel_t * const pixel) {
-    ASSERT(pixel != NULL);
+    NRFX_ASSERT(pixel != NULL);
 
     spi_transfer((uint8_t*)&pixel->raw_data, 2);
 }
 
-void ST7735_draw_string(const uint8_t x, const uint8_t y, const char * const string) {
-    ASSERT(string != NULL);
+void ST7735_draw_string(const uint8_t x, const uint8_t y, const char * const string, const pixel_t * const color, const size_t scale) {
+    NRFX_ASSERT(string != NULL);
+    NRFX_ASSERT(scale > 0);
 
     const size_t len = strlen(string);
 
     // for every character in the string
     for (size_t i = 0; i < len; i++) {
-        ST7735_draw_character(x, y + (i*FONT_NUM_ROWS), string[i]);
+        ST7735_draw_character(x, y + (i*FONT_NUM_ROWS*scale), string[i], color, scale);
     }
 }
 
 
 void ST7735_draw_character( const uint8_t x,
                             const uint8_t y,
-                            const char character) {
-
+                            const char character,
+                            const pixel_t * const color,
+                            const size_t scale) {
     NRFX_ASSERT(character >= 0);
+    NRFX_ASSERT(scale > 0);
+    const pixel_t pixel = { .raw_data = 0xffff };
+    const size_t x_len = FONT_NUM_ROWS * scale;
+    const size_t y_len = FONT_NUM_ROWS * scale;
 
-    pixel_t pixel = { .raw_data = 0xffff };
+    pixel_t buffer[x_len][y_len];
+    memset(&buffer, 0xff, sizeof(buffer));
 
-    // Set the bounds and make it white
-    ST7735_set_bounds(x, y, FONT_NUM_ROWS, FONT_NUM_ROWS);
-    ST7735_fill_bounds(&pixel);
+    // Set the bounds
+    ST7735_set_bounds(x, y, x_len, y_len);
 
     // Memory write command
     ST7735_send_command(RAMWR);
@@ -125,21 +131,32 @@ void ST7735_draw_character( const uint8_t x,
     // TODO: buffer this and write it all at once
 
     // Iterate over every pixel in the character
-    for (size_t i = 0; i < FONT_NUM_ROWS; i++) {
-        for (size_t j = 0; j < FONT_NUM_ROWS; j++) {
-            // Set the color to red if we need to draw anything,
+    for (size_t x = 0; x < FONT_NUM_ROWS; x++) {
+        for (size_t y = 0; y < FONT_NUM_ROWS; y++) {
+            // Set the color if we need to draw anything,
             // Otherwise, make the pixel white (0xffff)
             // Also, fuck using the cache, right?
-            if((font8x8_basic[(uint8_t)character][j] >> i) & 0x1) {
-                pixel_set_color(&pixel, red, 10);
-                pixel_set_color(&pixel, green, 10);
-                pixel_set_color(&pixel, blue, 31);
-            } else
-                pixel.raw_data = 0xffff;
-
-            transfer_pixel(&pixel);
+            if((font8x8_basic[(uint8_t)character][y] >> x) & 0x1)
+                buffer[x * scale][y * scale] = *color;
+            else
+                buffer[x * scale][y * scale] = pixel;
         }
     }
+
+    // If we have a scale, than we need to fill in the empty pixels
+    if(scale > 1){
+        for (size_t x = 0; x < x_len; x += scale) {
+            for (size_t y = 0; y < y_len; y += scale) {
+                for(size_t row = 0; row < scale; row++) {
+                    for(size_t col = 0; col < scale; col++) {
+                        buffer[x+row][y+col] = buffer[x][y];
+                    }
+                }
+            }
+        }
+    }
+
+    spi_transfer((uint8_t*)&buffer, sizeof(buffer));
 }
 
 // Function to set the drawing bounds on the display

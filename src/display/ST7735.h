@@ -48,9 +48,9 @@ typedef enum _pixel_colors {
 } pixel_colors_t;
 
 
-void ST7735_draw_character(const uint8_t x, const uint8_t y, const char character);
+void ST7735_draw_character(const uint8_t x, const uint8_t y, const char character, const pixel_t * const color, const size_t scale);
 
-void ST7735_draw_string(const uint8_t x, const uint8_t y, const char * const string);
+void ST7735_draw_string(const uint8_t x, const uint8_t y, const char * const string, const pixel_t * const color, const size_t scale);
 
 void ST7735_fill_bounds(const pixel_t * const color);
 
