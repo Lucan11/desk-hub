@@ -40,6 +40,9 @@ void spi_transfer(const uint8_t * const data, const size_t data_len) {
     nrfx_err_t err;
     const nrfx_spi_xfer_desc_t xfer = NRFX_SPI_XFER_TX(data, data_len);
 
+    NRFX_ASSERT(data != NULL);
+    NRFX_ASSERT(data_len > 0);
+
     err = nrfx_spi_xfer(&instance, &xfer, 0);
     APP_ERROR_CHECK(err);
 

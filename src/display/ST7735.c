@@ -1,5 +1,7 @@
 #include "ST7735.h"
 
+#include <string.h>
+
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
 
@@ -83,18 +85,24 @@ static inline void pixel_set_color(pixel_t * const pixel, pixel_colors_t color, 
 static inline void ST7735_send_command(uint8_t command);
 static inline void ST7735_send_data(uint8_t data);
 static inline void transfer_pixel(const pixel_t * const pixel);
-void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len);
+static void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len);
 
 
 
 // Need to send the RAMRW command before this function!
 static inline void transfer_pixel(const pixel_t * const pixel) {
+    ASSERT(pixel != NULL);
+
     spi_transfer((uint8_t*)&pixel->raw_data, 2);
 }
 
-void ST7735_draw_string(const uint8_t x, const uint8_t y, const char * const string, const size_t strlen) {
+void ST7735_draw_string(const uint8_t x, const uint8_t y, const char * const string) {
+    ASSERT(string != NULL);
+
+    const size_t len = strlen(string);
+
     // for every character in the string
-    for (size_t i = 0; i < strlen; i++) {
+    for (size_t i = 0; i < len; i++) {
         ST7735_draw_character(x, y + (i*FONT_NUM_ROWS), string[i]);
     }
 }
@@ -103,6 +111,9 @@ void ST7735_draw_string(const uint8_t x, const uint8_t y, const char * const str
 void ST7735_draw_character( const uint8_t x,
                             const uint8_t y,
                             const char character) {
+
+    NRFX_ASSERT(character >= 0);
+
     pixel_t pixel = { .raw_data = 0xffff };
 
     // Set the bounds and make it white
@@ -140,7 +151,7 @@ void ST7735_draw_character( const uint8_t x,
 //      0 < y_len <= DISPLAY_HEIGHT
 //      0 <= x + x_len < DISPLAY_WIDTH);
 //      0 <= y + y_len < DISPLAY_HEIGHT);
-void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len) {
+static void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len) {
     // NRF_LOG_INFO("x: %u, y: %u, x_len: %u, y_len: %u, max_x: %u, max_y: %u", x, y, x_len, y_len, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
     NRFX_ASSERT(x + x_len <= DISPLAY_WIDTH);
@@ -197,6 +208,7 @@ static inline void ST7735_send_data(uint8_t data) {
 
 
 void ST7735_fill_bounds(const pixel_t * const color) {
+    NRFX_ASSERT(color != NULL);
 
     // Memory write command
     ST7735_send_command(RAMWR);
@@ -208,6 +220,8 @@ void ST7735_fill_bounds(const pixel_t * const color) {
 
 
 static inline void pixel_set_color(pixel_t * const pixel, const pixel_colors_t color, const uint8_t value) {
+    NRFX_ASSERT(pixel != NULL);
+
     switch (color) {
     case red:
         NRFX_ASSERT(value <= PIXEL_RED_MAX_VALUE);
