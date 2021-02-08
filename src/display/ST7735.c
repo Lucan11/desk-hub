@@ -234,7 +234,7 @@ void ST7735_fill_bounds(const pixel_t * const color) {
     }
 }
 
-
+// TODO: set value to a percentage (0 - COLOR_MAX)
 void pixel_set_color(pixel_t * const pixel, const pixel_colors_t color, const uint8_t value) {
     NRFX_ASSERT(pixel != NULL);
 
