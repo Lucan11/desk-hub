@@ -135,6 +135,12 @@ static inline void transfer_pixel(const pixel_t * const pixel) {
     wait_for_transfer();
 }
 
+void ST7735_draw_string(const uint8_t x, const uint8_t y, const char * const string, const size_t strlen) {
+    // for every character in the string
+    for (size_t i = 0; i < strlen; i++) {
+        ST7735_draw_character(x, y + (i*FONT_NUM_ROWS), string[i]);
+    }
+}
 
 
 void ST7735_draw_character( const uint8_t x,
@@ -345,8 +351,15 @@ static void display_configure() {
     ST7735_send_command(COLMOD);
     ST7735_send_data(0b00000101);
 
+    ST7735_send_command(MADCTL);
+    ST7735_send_data(0b01000000);
+
     // Set the correct bounds, such that we dont write out of bounds
     ST7735_set_bounds(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+
+    // Set the color to white
+    pixel_t color = {.raw_data = 0xffff};
+    ST7735_set_color(&color);
 
     // Turn the screen on
     ST7735_send_command(DISPON);

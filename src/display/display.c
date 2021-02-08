@@ -10,5 +10,5 @@ void display_init(){
 }
 
 void display_set_sensor_data(const temperature_sensor_data_t * const data) {
-    ST7735_draw_character(0, 0, 'c');
+    ST7735_draw_string(5, 5, "Dit is een test!", strlen("Dit is een test!"));
 }

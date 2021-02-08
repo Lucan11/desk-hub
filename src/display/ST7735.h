@@ -1,7 +1,8 @@
 #ifndef _ST7735_H_
 #define _ST7735_H_
 
-#include <stdint.h>
+#include <stdint.h> // uint8_t
+#include <stddef.h> // size_t
 
 // 5-6-5 RGB configuration
 typedef struct _pixel {
@@ -31,6 +32,8 @@ typedef enum _pixel_colors {
 
 
 void ST7735_draw_character(const uint8_t x, const uint8_t y, const char character);
+
+void ST7735_draw_string(const uint8_t x, const uint8_t y, const char * const string, const size_t strlen);
 
 void ST7735_set_color(const pixel_t * const color);
 
