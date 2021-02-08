@@ -4,6 +4,23 @@
 #include <stdint.h> // uint8_t
 #include <stddef.h> // size_t
 
+
+// The display size is not the max that the ST7735 can support (132x162).
+// The reported display size is 128x160, but I'm not sure if I missed a
+// configuration in a register. But I need these offsets to be able to
+// write from begin to end, otherwise we write outside of the display bounds
+#define DISPLAY_X_START_OFFSET  ((uint8_t)2)
+#define DISPLAY_X_STOP_OFFSET   ((uint8_t)129)
+#define DISPLAY_Y_START_OFFSET  ((uint8_t)1)
+#define DISPLAY_Y_STOP_OFFSET   ((uint8_t)160)
+
+// Add one because we want the number of pixels, which is 0-indexed
+#define DISPLAY_WIDTH           (DISPLAY_X_STOP_OFFSET - DISPLAY_X_START_OFFSET + 1)
+#define DISPLAY_HEIGHT          (DISPLAY_Y_STOP_OFFSET - DISPLAY_Y_START_OFFSET + 1)
+#define DISPLAY_NUM_PIXELS      ((DISPLAY_WIDTH) * (DISPLAY_HIGHT))
+
+
+
 // 5-6-5 RGB configuration
 typedef struct _pixel {
     union

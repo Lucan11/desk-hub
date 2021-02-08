@@ -16,19 +16,6 @@
 #define RESET_DOWN_TIME_US  10          // Time in us that the reset pin needs to be down for the reset to trigger
 
 
-// The display size is not the max that the ST7735 can support (132x162)
-// The reported display size is 128x160, but I'm not sure if I missed a
-// configuration in a register. But I need these offsets to be able to
-// write from begin to end, otherwise we write outside of the display bounds
-#define DISPLAY_X_START_OFFSET  ((uint8_t)2)
-#define DISPLAY_X_STOP_OFFSET   ((uint8_t)129)
-#define DISPLAY_Y_START_OFFSET  ((uint8_t)1)
-#define DISPLAY_Y_STOP_OFFSET   ((uint8_t)160)
-#define DISPLAY_WIDTH           (DISPLAY_X_STOP_OFFSET - DISPLAY_X_START_OFFSET + 1)
-#define DISPLAY_HEIGHT          (DISPLAY_Y_STOP_OFFSET - DISPLAY_Y_START_OFFSET + 1)
-#define DISPLAY_NUM_PIXELS      ((DISPLAY_WIDTH) * (DISPLAY_HIGHT))
-
-
 #define PIXEL_RED_BITS          5
 #define PIXEL_GREEN_BITS        6
 #define PIXEL_BLUE_BITS         5
