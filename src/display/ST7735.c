@@ -1,20 +1,12 @@
 #include "ST7735.h"
 
 #include "nrf_gpio.h"
-#include "nrfx_spi.h"
 #include "nrf_delay.h"
 
 #include "log.h"
 #include "font.h"
+#include "spi.h"
 
-
-// These names are I2C, but the interface is actualy SPI
-// Thanks, aliexpress
-#define SCL_PIN             18
-#define SDA_PIN             19
-#define CHIP_SELECT_PIN     23
-#define MOSI_PIN            SDA_PIN
-#define SCK_PIN             SCL_PIN
 
 #define RESET_PIN           20          // 1 is function, 0 is reset
 #define DATA_COMMAND_PIN    22          // 1 is data, 0 is command
@@ -83,9 +75,6 @@
 #define PWCTR6  0xFC
 
 
-// SPI and I2C use the same hardware, so use SPI1 instead of 0
-static nrfx_spi_t instance = NRFX_SPI_INSTANCE(1);
-
 
 // Data structure to keep track of the current screen bounds
 // Used by functions that draw to the screen
@@ -101,38 +90,19 @@ struct _current_bounds {
 
 
 static void ST7735_gpio_init();
-static void ST7735_spi_init();
-static void ST7735_spi_event_handler(nrfx_spi_evt_t const * p_event, void * p_context);
 static void ST7735_reset();
 static void display_configure();
 static inline void pixel_set_color(pixel_t * const pixel, pixel_colors_t color, const uint8_t value);
-static inline void wait_for_transfer();
 static inline void ST7735_send_command(uint8_t command);
 static inline void ST7735_send_data(uint8_t data);
 static inline void transfer_pixel(const pixel_t * const pixel);
 void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len);
 
 
-static volatile unsigned int transfer_done = 0;
-static inline void wait_for_transfer() {
-    // NRF_LOG_INFO("waiting for transfer!");
-    while (transfer_done == 0) {
-        // maybe sleep here
-    }
-
-    transfer_done = 0;
-}
-
 
 // Need to send the RAMRW command before this function!
 static inline void transfer_pixel(const pixel_t * const pixel) {
-    nrfx_err_t err;
-    const nrfx_spi_xfer_desc_t xfer = NRFX_SPI_XFER_TX(&pixel->raw_data, 2);
-
-    err = nrfx_spi_xfer(&instance, &xfer, 0);
-    APP_ERROR_CHECK(err);
-
-    wait_for_transfer();
+    spi_transfer((uint8_t*)&pixel->raw_data, 2);
 }
 
 void ST7735_draw_string(const uint8_t x, const uint8_t y, const char * const string, const size_t strlen) {
@@ -150,10 +120,12 @@ void ST7735_draw_character( const uint8_t x,
 
     // Set the bounds and make it white
     ST7735_set_bounds(x, y, FONT_NUM_ROWS, FONT_NUM_ROWS);
-    ST7735_set_color(&pixel);
+    ST7735_fill_bounds(&pixel);
 
     // Memory write command
     ST7735_send_command(RAMWR);
+
+    // TODO: buffer this and write it all at once
 
     // Iterate over every pixel in the character
     for (size_t i = 0; i < FONT_NUM_ROWS; i++) {
@@ -220,35 +192,24 @@ void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, co
 }
 
 static inline void ST7735_send_command(uint8_t command) {
-    nrfx_err_t err;
-    const nrfx_spi_xfer_desc_t xfer = NRFX_SPI_XFER_TX(&command, 1);
 
     nrf_gpio_pin_clear(DATA_COMMAND_PIN);
 
-    err = nrfx_spi_xfer(&instance, &xfer, 0);
-    APP_ERROR_CHECK(err);
-
-    wait_for_transfer();
+    spi_transfer(&command, 1);
 
     nrf_gpio_pin_set(DATA_COMMAND_PIN);
 }
 
 
 static inline void ST7735_send_data(uint8_t data) {
-    nrfx_err_t err;
-    const nrfx_spi_xfer_desc_t xfer = NRFX_SPI_XFER_TX(&data, 1);
-
     // Make sure it is set
     nrf_gpio_pin_set(DATA_COMMAND_PIN);
 
-    err = nrfx_spi_xfer(&instance, &xfer, 0);
-    APP_ERROR_CHECK(err);
-
-    wait_for_transfer();
+    spi_transfer(&data, 1);
 }
 
 
-void ST7735_set_color(const pixel_t * const color) {
+void ST7735_fill_bounds(const pixel_t * const color) {
 
     // Memory write command
     ST7735_send_command(RAMWR);
@@ -285,12 +246,6 @@ static inline void pixel_set_color(pixel_t * const pixel, const pixel_colors_t c
 }
 
 
-static void ST7735_spi_event_handler(nrfx_spi_evt_t const * p_event, void * p_context) {
-    // nrfx_spi_1_irq_handler();
-    transfer_done = 1;
-}
-
-
 static void ST7735_reset(){
     // First hw reset
     nrf_gpio_pin_clear(RESET_PIN);
@@ -299,7 +254,7 @@ static void ST7735_reset(){
 
     nrf_gpio_pin_set(RESET_PIN);
 
-    nrf_delay_ms(POWER_UP_TIME_MS); // Not sure if this one also needs to be this long
+    nrf_delay_ms(5);
 
     // software reset
     ST7735_send_command(SWRESET);
@@ -321,28 +276,6 @@ static void ST7735_gpio_init() {
 }
 
 
-static void ST7735_spi_init() {
-    nrfx_err_t err;
-
-    const nrfx_spi_config_t config  = {
-        .sck_pin = SCK_PIN,
-        .mosi_pin = MOSI_PIN,
-        .miso_pin = NRFX_SPI_PIN_NOT_USED,
-        .ss_pin = CHIP_SELECT_PIN,
-        .irq_priority = NRFX_SPI_DEFAULT_CONFIG_IRQ_PRIORITY,
-        .orc = 0xFF, // what to transmit when receiving. Not sure if it matters in our case
-        .frequency = NRF_SPI_FREQ_8M,
-        .mode = NRF_SPI_MODE_0,
-        .bit_order = NRF_SPI_BIT_ORDER_MSB_FIRST
-    };
-
-    err = nrfx_spi_init(&instance,
-                        &config,
-                        ST7735_spi_event_handler,
-                        NULL);
-    APP_ERROR_CHECK(err);
-}
-
 static void display_configure() {
     // Go out of sleep mode
     ST7735_send_command(SLPOUT);
@@ -351,15 +284,16 @@ static void display_configure() {
     ST7735_send_command(COLMOD);
     ST7735_send_data(0b00000101);
 
+    // Invert x-axis (MV-X) to orient the display correctly
     ST7735_send_command(MADCTL);
     ST7735_send_data(0b01000000);
 
     // Set the correct bounds, such that we dont write out of bounds
     ST7735_set_bounds(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
-    // Set the color to white
+    // Set the display color to white
     pixel_t color = {.raw_data = 0xffff};
-    ST7735_set_color(&color);
+    ST7735_fill_bounds(&color);
 
     // Turn the screen on
     ST7735_send_command(DISPON);

@@ -72,6 +72,7 @@ SRC_FILES += \
   $(PROJ_DIR)/src/display/ST7735.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_spi.c \
   $(PROJ_DIR)/src/display/display.c \
+  $(PROJ_DIR)/src/spi/spi.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
