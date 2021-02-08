@@ -182,7 +182,7 @@ void ST7735_draw_character( const uint8_t x,
 //      0 <= x + x_len < DISPLAY_WIDTH);
 //      0 <= y + y_len < DISPLAY_HEIGHT);
 void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len) {
-    NRF_LOG_INFO("x: %u, y: %u, x_len: %u, y_len: %u, max_x: %u, max_y: %u", x, y, x_len, y_len, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    // NRF_LOG_INFO("x: %u, y: %u, x_len: %u, y_len: %u, max_x: %u, max_y: %u", x, y, x_len, y_len, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
     NRFX_ASSERT(x + x_len <= DISPLAY_WIDTH);
     NRFX_ASSERT(y + y_len <= DISPLAY_HEIGHT);
@@ -202,7 +202,7 @@ void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, co
     current_bounds.ydim = current_bounds.ye - current_bounds.ys + 1;
     current_bounds.num_pixels = (current_bounds.xdim) * (current_bounds.ydim);
 
-    NRF_LOG_INFO("xs: %u, ys: %u, xe: %u, ye: %u", current_bounds.xs, current_bounds.ys, current_bounds.xe, current_bounds.ye);
+    // NRF_LOG_INFO("xs: %u, ys: %u, xe: %u, ye: %u", current_bounds.xs, current_bounds.ys, current_bounds.xe, current_bounds.ye);
 
     // Set the column (xs - xe)
     ST7735_send_command(CASET);

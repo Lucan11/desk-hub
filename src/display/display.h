@@ -6,7 +6,7 @@ typedef struct _temperature_sensor_data temperature_sensor_data_t;
 
 void display_init();
 
-void display_set_sensor_data(const temperature_sensor_data_t * const data);
+void display_set_sensor_data(const temperature_sensor_data_t * const inside_data, const temperature_sensor_data_t * const outside_data);
 
 
 
