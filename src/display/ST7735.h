@@ -54,6 +54,9 @@ void ST7735_draw_string(const uint8_t x, const uint8_t y, const char * const str
 
 void ST7735_fill_bounds(const pixel_t * const color);
 
+void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len);
+
+void pixel_set_color(pixel_t * const pixel, pixel_colors_t color, const uint8_t value);
 
 void ST7735_init();
 

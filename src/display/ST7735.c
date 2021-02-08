@@ -81,11 +81,10 @@ struct _current_bounds {
 static void ST7735_gpio_init();
 static void ST7735_reset();
 static void display_configure();
-static inline void pixel_set_color(pixel_t * const pixel, pixel_colors_t color, const uint8_t value);
 static inline void ST7735_send_command(uint8_t command);
 static inline void ST7735_send_data(uint8_t data);
 static inline void transfer_pixel(const pixel_t * const pixel);
-static void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len);
+
 
 
 
@@ -132,9 +131,9 @@ void ST7735_draw_character( const uint8_t x,
             // Otherwise, make the pixel white (0xffff)
             // Also, fuck using the cache, right?
             if((font8x8_basic[(uint8_t)character][j] >> i) & 0x1) {
-                pixel_set_color(&pixel, red, PIXEL_RED_MAX_VALUE);
-                pixel_set_color(&pixel, green, 0);
-                pixel_set_color(&pixel, blue, 0);
+                pixel_set_color(&pixel, red, 10);
+                pixel_set_color(&pixel, green, 10);
+                pixel_set_color(&pixel, blue, 31);
             } else
                 pixel.raw_data = 0xffff;
 
@@ -151,7 +150,7 @@ void ST7735_draw_character( const uint8_t x,
 //      0 < y_len <= DISPLAY_HEIGHT
 //      0 <= x + x_len < DISPLAY_WIDTH);
 //      0 <= y + y_len < DISPLAY_HEIGHT);
-static void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len) {
+void ST7735_set_bounds(const uint8_t x, const uint8_t y, const uint8_t x_len, const uint8_t y_len) {
     // NRF_LOG_INFO("x: %u, y: %u, x_len: %u, y_len: %u, max_x: %u, max_y: %u", x, y, x_len, y_len, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
     NRFX_ASSERT(x + x_len <= DISPLAY_WIDTH);
@@ -219,7 +218,7 @@ void ST7735_fill_bounds(const pixel_t * const color) {
 }
 
 
-static inline void pixel_set_color(pixel_t * const pixel, const pixel_colors_t color, const uint8_t value) {
+void pixel_set_color(pixel_t * const pixel, const pixel_colors_t color, const uint8_t value) {
     NRFX_ASSERT(pixel != NULL);
 
     switch (color) {
