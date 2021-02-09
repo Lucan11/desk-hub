@@ -8,6 +8,7 @@
 #include "ST7735.h"
 #include "Si7021.h"
 #include "font.h"
+#include "log.h"
 
 #define SCALE_BIG       3
 #define SCALE_NORMAL    2
@@ -23,9 +24,16 @@
 #define HUMI_X          (ROW*4*SCALE_NORMAL)
 #define BORDER_PIXELS   4
 
-void display_init(){
-    pixel_t color = { 0 };
 
+static pixel_t color;
+
+
+static inline void draw_temp(const uint8_t x, const uint8_t y, const float temp);
+static inline void draw_humi(const uint8_t x, const uint8_t y, const float humi);
+
+
+
+void display_init(){
     ST7735_init();
 
     pixel_set_color(&color, red, 10);
@@ -48,35 +56,62 @@ void display_init(){
 
 void display_set_sensor_data(   const temperature_sensor_data_t * const inside_data,
                                 const temperature_sensor_data_t * const outside_data) {
-    char buffer[5];
-    pixel_t color;
-
-    pixel_set_color(&color, red, 10);
-    pixel_set_color(&color, green, 10);
-    pixel_set_color(&color, blue, 55);
 
     // This offset is the size of the TEMP/HUMI string
     uint8_t y_offset = FONT_NUM_ROWS + (strlen(TEMP_STR) * FONT_NUM_ROWS * SCALE_NORMAL);
 
     // inside data
-    __itoa(inside_data->temperature, buffer, 10);
-    ST7735_draw_string(TEMP_X - FONT_NUM_ROWS/2, y_offset, buffer, &color, SCALE_BIG);
-    ST7735_draw_string(TEMP_X - FONT_NUM_ROWS/2, y_offset + (strlen(buffer) * FONT_NUM_ROWS * SCALE_BIG), "O", &color, SCALE_SMAL);
-    __itoa(inside_data->humidity, buffer, 10);
-    ST7735_draw_string(HUMI_X - FONT_NUM_ROWS/2, y_offset, buffer, &color, SCALE_BIG);
-    ST7735_draw_string(HUMI_X - FONT_NUM_ROWS/2, y_offset + (strlen(buffer) * FONT_NUM_ROWS * SCALE_BIG), "%", &color, SCALE_SMAL);
+    draw_temp(TEMP_X - FONT_NUM_ROWS/2, y_offset, inside_data->temperature);
+    draw_humi(HUMI_X - FONT_NUM_ROWS/2, y_offset, inside_data->humidity);
 
     // Offset to the middle of the screen, one normal sized character extra
     y_offset = DISPLAY_HEIGHT/2 + FONT_NUM_ROWS * SCALE_NORMAL;
 
-    // Outside data
-    __itoa(outside_data->temperature, buffer, 10);
-    ST7735_draw_string(TEMP_X - FONT_NUM_ROWS/2, y_offset, buffer, &color, SCALE_BIG);
-    ST7735_draw_string(TEMP_X - FONT_NUM_ROWS/2, y_offset + (strlen(buffer) * FONT_NUM_ROWS * SCALE_BIG), "O", &color, SCALE_SMAL);
-    __itoa(outside_data->humidity, buffer, 10);
-    ST7735_draw_string(HUMI_X - FONT_NUM_ROWS/2, y_offset, buffer, &color, SCALE_BIG);
-    ST7735_draw_string(HUMI_X - FONT_NUM_ROWS/2, y_offset + (strlen(buffer) * FONT_NUM_ROWS * SCALE_BIG), "%", &color, SCALE_SMAL);
+    draw_temp(TEMP_X - FONT_NUM_ROWS/2, y_offset, outside_data->temperature);
+    draw_humi(HUMI_X - FONT_NUM_ROWS/2, y_offset, outside_data->humidity);
 }
+
+
+
+
+static inline void draw_temp(const uint8_t x, const uint8_t y, const float temp) {
+    char buffer[5];
+    const int itemp = (int)temp;
+    const unsigned int dec = (int)((temp - itemp) * 10);
+    const size_t len = itemp >= 10 ? 2 : 1;
+
+    // Draw the temperature by first drawing the whole number
+    __itoa(itemp, buffer, 10);
+    ST7735_draw_string(x, y, buffer, &color, SCALE_BIG);
+
+    // Then the little °C at the end
+    ST7735_draw_character(x, y + (len * FONT_NUM_ROWS * SCALE_BIG), FONT_DEGREE_MARK, &color, SCALE_SMAL);
+
+    // Then the decimal
+    __itoa(dec, buffer, 10);
+    ST7735_draw_string(x + 1.5*ROW, y + (len * FONT_NUM_ROWS * SCALE_BIG), buffer, &color, SCALE_SMAL);
+}
+
+
+
+static inline void draw_humi(const uint8_t x, const uint8_t y, const float humi) {
+    char buffer[5];
+    const int ihumi = (int)humi;
+    const unsigned int dec = (int)((humi - ihumi) * 10);
+    const size_t len = ihumi >= 10 ? 2 : 1;
+
+    // Draw the humidity by first drawing the whole number
+    __itoa(ihumi, buffer, 10);
+    ST7735_draw_string(x, y, buffer, &color, SCALE_BIG);
+
+    // Then the little % at the end
+    ST7735_draw_string(x, y + (len * FONT_NUM_ROWS * SCALE_BIG), "%", &color, SCALE_SMAL);
+
+    // Then the decimal
+    __itoa(dec, buffer, 10);
+    ST7735_draw_string(x + 1.5*ROW, y + (len * FONT_NUM_ROWS * SCALE_BIG), buffer, &color, SCALE_SMAL);
+}
+
 
 
 
