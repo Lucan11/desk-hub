@@ -114,6 +114,7 @@ void ST7735_draw_character( const uint8_t x,
                             const pixel_t * const color,
                             const size_t scale) {
     NRFX_ASSERT(character >= 0);
+    NRFX_ASSERT(character < FONT_MAX_CHAR);
     NRFX_ASSERT(scale > 0);
 
     const pixel_t pixel = { .raw_data = 0xffff };

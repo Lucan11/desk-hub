@@ -24,7 +24,9 @@
 #include <stdint.h>
 
 #define FONT_NUM_ROWS       8
+#define FONT_MAX_CHAR       129
+#define FONT_DEGREE_MARK    ((char)128)
 
-extern const uint8_t font8x8_basic[128][FONT_NUM_ROWS];
+extern const uint8_t font8x8_basic[FONT_MAX_CHAR][FONT_NUM_ROWS];
 
 #endif//_FONT_H_
